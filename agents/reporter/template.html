@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주간 마케팅 리포트 — {{ date }}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+            padding: 40px 20px;
+        }
+        .container { max-width: 860px; margin: 0 auto; }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 12px;
+            margin-bottom: 28px;
+        }
+        header h1 { font-size: 26px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.5px; }
+        .meta { display: flex; gap: 24px; font-size: 14px; opacity: 0.88; flex-wrap: wrap; }
+        .meta span::before { content: '• '; opacity: 0.6; }
+        .meta span:first-child::before { content: ''; }
+
+        /* Section cards */
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin-bottom: 22px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        }
+        .section h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #4a5568;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+        }
+
+        /* Trend Keywords TOP 5 */
+        .keyword-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 14px 0;
+            border-bottom: 1px solid #f0f4f8;
+        }
+        .keyword-item:last-child { border-bottom: none; }
+        .rank {
+            font-size: 26px;
+            font-weight: 800;
+            color: #e2e8f0;
+            min-width: 36px;
+            line-height: 1.2;
+        }
+        .rank.top3 { color: #667eea; }
+        .keyword-name { font-size: 16px; font-weight: 600; color: #2d3748; margin-bottom: 4px; }
+        .keyword-reason { font-size: 14px; color: #718096; line-height: 1.5; }
+
+        /* Performance Predictions */
+        .perf-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            padding: 14px 0;
+            border-bottom: 1px solid #f0f4f8;
+        }
+        .perf-item:last-child { border-bottom: none; }
+        .perf-title { font-size: 15px; font-weight: 500; flex: 1; min-width: 0; color: #2d3748; line-height: 1.5; word-break: keep-all; }
+        .perf-right { text-align: right; flex: 0 0 220px; }
+        .badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .badge.high { background: #c6f6d5; color: #22543d; }
+        .badge.medium { background: #fef3c7; color: #7b3f00; }
+        .badge.low { background: #fed7d7; color: #7b1d1d; }
+        .perf-reason { font-size: 13px; color: #718096; line-height: 1.4; }
+
+        /* Next Week Keywords */
+        .next-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+        }
+        .next-item {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 16px 18px;
+            border-left: 4px solid #667eea;
+        }
+        .next-keyword { font-size: 15px; font-weight: 700; color: #2d3748; margin-bottom: 6px; }
+        .next-rationale { font-size: 13px; color: #718096; line-height: 1.5; }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            font-size: 12px;
+            color: #a0aec0;
+            margin-top: 28px;
+            padding: 16px;
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .section { box-shadow: none; border: 1px solid #e2e8f0; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <header>
+        <h1>주간 마케팅 리포트</h1>
+        <div class="meta">
+            <span>기준일: {{ date }}</span>
+            <span>분석 콘텐츠: {{ items|length }}개</span>
+            <span>생성: {{ generated_at }}</span>
+        </div>
+    </header>
+
+    <div class="section">
+        <h2>📊 이번 주 트렌드 키워드 TOP 5</h2>
+        {% for kw in trend_keywords %}
+        <div class="keyword-item">
+            <div class="rank {% if kw.rank <= 3 %}top3{% endif %}">{{ kw.rank }}</div>
+            <div>
+                <div class="keyword-name">{{ kw.keyword }}</div>
+                <div class="keyword-reason">{{ kw.reason }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <h2>📈 생성된 콘텐츠 성과 예측</h2>
+        {% for pred in performance_predictions %}
+        <div class="perf-item">
+            <div class="perf-title">{{ pred.title }}</div>
+            <div class="perf-right">
+                <div>
+                    <span class="badge {% if pred.predicted_level == '높음' %}high{% elif pred.predicted_level == '중간' %}medium{% else %}low{% endif %}">
+                        예상 성과: {{ pred.predicted_level }}
+                    </span>
+                </div>
+                <div class="perf-reason">{{ pred.reason }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="section">
+        <h2>🎯 다음 주 추천 키워드</h2>
+        <div class="next-grid">
+        {% for kw in next_week_keywords %}
+        <div class="next-item">
+            <div class="next-keyword">{{ kw.keyword }}</div>
+            <div class="next-rationale">{{ kw.rationale }}</div>
+        </div>
+        {% endfor %}
+        </div>
+    </div>
+
+    <footer>
+        마케팅 에이전트 자동 생성 리포트 &mdash; {{ generated_at }}
+    </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마케팅 자동화 시스템</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container { max-width: 720px; margin: 0 auto; }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 36px 40px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+        }
+        header h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+        header p  { font-size: 14px; opacity: 0.8; }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        }
+        .card h2 { font-size: 16px; font-weight: 700; color: #4a5568; margin-bottom: 16px; }
+
+        .input-row { display: flex; gap: 12px; }
+        .input-row input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-row input:focus { border-color: #667eea; }
+        .btn-run {
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .btn-run:hover { opacity: 0.88; }
+        .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Progress */
+        #progress-card { display: none; }
+
+        .steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: #f7fafc;
+            font-size: 14px;
+            color: #a0aec0;
+            transition: all 0.3s;
+        }
+        .step.active  { background: #ebf4ff; color: #2b6cb0; font-weight: 600; }
+        .step.done    { background: #f0fff4; color: #276749; }
+        .step.error   { background: #fff5f5; color: #c53030; }
+
+        .step-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+
+        /* Log */
+        #log {
+            background: #1a202c;
+            color: #a0aec0;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Consolas', 'D2Coding', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            height: 220px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        #log .log-step { color: #90cdf4; font-weight: bold; }
+        #log .log-err  { color: #fc8181; }
+
+        /* Download */
+        #download-card { display: none; }
+        .btn-download {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: #38a169;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        .btn-download:hover { opacity: 0.88; }
+        .done-msg { font-size: 14px; color: #718096; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <header>
+        <h1>마케팅 자동화 시스템</h1>
+        <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트까지 자동 실행</p>
+    </header>
+
+    <!-- 키워드 입력 -->
+    <div class="card">
+        <h2>키워드 입력</h2>
+        <div class="input-row">
+            <input id="keyword" type="text" placeholder="예: AI 마케팅" />
+            <button class="btn-run" id="btn-run" onclick="startPipeline()">실행</button>
+        </div>
+    </div>
+
+    <!-- 진행 상황 -->
+    <div class="card" id="progress-card">
+        <h2>진행 상황</h2>
+        <div class="steps">
+            <div class="step" id="step-1"><span class="step-icon">⏳</span> 1/5 &nbsp;수집 (collector)</div>
+            <div class="step" id="step-2"><span class="step-icon">⏳</span> 2/5 &nbsp;분석 (analyzer)</div>
+            <div class="step" id="step-3"><span class="step-icon">⏳</span> 3/5 &nbsp;작성 (writer)</div>
+            <div class="step" id="step-4"><span class="step-icon">⏳</span> 4/5 &nbsp;리포트 (reporter)</div>
+            <div class="step" id="step-5"><span class="step-icon">⏳</span> 5/5 &nbsp;모니터 (monitor)</div>
+        </div>
+        <div id="log"></div>
+    </div>
+
+    <!-- 다운로드 -->
+    <div class="card" id="download-card">
+        <h2>완료</h2>
+        <a class="btn-download" id="btn-download" href="#">
+            ⬇ 리포트 PDF 다운로드
+        </a>
+        <div class="done-msg" id="done-msg"></div>
+    </div>
+
+</div>
+
+<script>
+    const STEP_PREFIXES = ['1/5', '2/5', '3/5', '4/5', '5/5'];
+    let currentStep = 0;
+
+    function appendLog(text, cls) {
+        const log = document.getElementById('log');
+        const span = document.createElement('span');
+        if (cls) span.className = cls;
+        span.textContent = text + '\n';
+        log.appendChild(span);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function setStep(stepNum, state) {
+        const el = document.getElementById('step-' + stepNum);
+        if (!el) return;
+        el.className = 'step ' + state;
+        const icons = { active: '▶', done: '✓', error: '✗', '': '⏳' };
+        el.querySelector('.step-icon').textContent = icons[state] || '⏳';
+    }
+
+    function startPipeline() {
+        const keyword = document.getElementById('keyword').value.trim();
+        if (!keyword) { alert('키워드를 입력하세요.'); return; }
+
+        // 초기화
+        document.getElementById('log').innerHTML = '';
+        document.getElementById('progress-card').style.display = 'block';
+        document.getElementById('download-card').style.display = 'none';
+        document.getElementById('btn-run').disabled = true;
+        currentStep = 0;
+        for (let i = 1; i <= 5; i++) setStep(i, '');
+
+        fetch('/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keyword }),
+        })
+        .then(r => r.json())
+        .then(({ job_id, error }) => {
+            if (error) { alert(error); document.getElementById('btn-run').disabled = false; return; }
+            listenStream(job_id);
+        });
+    }
+
+    function listenStream(jobId) {
+        const es = new EventSource('/stream/' + jobId);
+
+        es.onmessage = (e) => {
+            const msg = e.data;
+            if (msg === 'PING') return;
+
+            if (msg.startsWith('STEP:')) {
+                const name = msg.slice(5);
+                // 이전 스텝 완료 처리
+                if (currentStep > 0) setStep(currentStep, 'done');
+                // 현재 스텝 번호 파싱 (1/5 → 1)
+                const match = name.match(/^(\d+)\/5/);
+                currentStep = match ? parseInt(match[1]) : currentStep + 1;
+                setStep(currentStep, 'active');
+                appendLog('\n▶ ' + name.trim(), 'log-step');
+
+            } else if (msg.startsWith('LOG:')) {
+                appendLog(msg.slice(4));
+
+            } else if (msg.startsWith('ERROR:')) {
+                appendLog(msg.slice(6), 'log-err');
+                if (currentStep > 0) setStep(currentStep, 'error');
+                es.close();
+                document.getElementById('btn-run').disabled = false;
+
+            } else if (msg.startsWith('DONE:')) {
+                const reportDate = msg.slice(5);
+                // 마지막 스텝 완료
+                if (currentStep > 0) setStep(currentStep, 'done');
+                es.close();
+                showDownload(reportDate);
+                document.getElementById('btn-run').disabled = false;
+
+            } else if (msg === 'DONE') {
+                // 에러로 인한 종료
+                es.close();
+                document.getElementById('btn-run').disabled = false;
+            }
+        };
+
+        es.onerror = () => {
+            appendLog('[연결 오류] 스트림이 끊어졌습니다.', 'log-err');
+            es.close();
+            document.getElementById('btn-run').disabled = false;
+        };
+    }
+
+    function showDownload(reportDate) {
+        const card = document.getElementById('download-card');
+        card.style.display = 'block';
+        document.getElementById('btn-download').href = '/download/' + reportDate;
+        document.getElementById('done-msg').textContent =
+            '리포트가 생성됐습니다: output/report_' + reportDate + '.pdf';
+    }
+
+    // Enter 키로 실행
+    document.getElementById('keyword').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') startPipeline();
+    });
+</script>
+</body>
+</html>
