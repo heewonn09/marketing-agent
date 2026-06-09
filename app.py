@@ -132,6 +132,17 @@ def stream(job_id: str):
     )
 
 
+@app.route("/result/<report_date>/<path:keyword>")
+def result(report_date: str, keyword: str):
+    import re, json
+    safe_keyword = re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+    content_path = ROOT / "output" / f"content_{safe_keyword}_{report_date}.json"
+    if not content_path.exists():
+        return jsonify({"error": "콘텐츠 파일을 찾을 수 없습니다"}), 404
+    with open(content_path, encoding="utf-8") as f:
+        return jsonify(json.load(f))
+
+
 @app.route("/download/<report_date>")
 def download(report_date: str):
     pdf_path = ROOT / "output" / f"report_{report_date}.pdf"

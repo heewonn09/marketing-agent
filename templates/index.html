@@ -8,36 +8,62 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-            background: #f5f7fa;
+            background: #f0f2f7;
             color: #2d3748;
             min-height: 100vh;
-            padding: 40px 20px;
+            padding: 32px 20px;
         }
-        .container { max-width: 720px; margin: 0 auto; }
 
+        .container { max-width: 1100px; margin: 0 auto; }
+
+        /* ── Header ── */
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 36px 40px;
+            padding: 32px 40px;
             border-radius: 16px;
             margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        header h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
-        header p  { font-size: 14px; opacity: 0.8; }
+        header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        header p  { font-size: 13px; opacity: 0.8; }
 
+        /* ── Layout ── */
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+        @media (max-width: 760px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        /* ── Card ── */
         .card {
             background: white;
             border-radius: 12px;
-            padding: 28px 32px;
-            margin-bottom: 20px;
+            padding: 24px 28px;
+            margin-bottom: 18px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.06);
         }
-        .card h2 { font-size: 16px; font-weight: 700; color: #4a5568; margin-bottom: 16px; }
+        .card:last-child { margin-bottom: 0; }
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+        }
 
-        .input-row { display: flex; gap: 12px; }
+        /* ── Input ── */
+        .input-row { display: flex; gap: 10px; }
         .input-row input {
             flex: 1;
-            padding: 12px 16px;
+            padding: 11px 16px;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
             font-size: 15px;
@@ -47,7 +73,7 @@
         }
         .input-row input:focus { border-color: #667eea; }
         .btn-run {
-            padding: 12px 28px;
+            padding: 11px 26px;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
@@ -60,39 +86,37 @@
             white-space: nowrap;
         }
         .btn-run:hover { opacity: 0.88; }
-        .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-run:disabled { opacity: 0.45; cursor: not-allowed; }
 
-        /* Progress */
+        /* ── Steps ── */
         #progress-card { display: none; }
-
-        .steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        .steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
         .step {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 10px 14px;
+            gap: 10px;
+            padding: 9px 13px;
             border-radius: 8px;
             background: #f7fafc;
-            font-size: 14px;
+            font-size: 13px;
             color: #a0aec0;
-            transition: all 0.3s;
+            transition: all 0.25s;
         }
         .step.active  { background: #ebf4ff; color: #2b6cb0; font-weight: 600; }
         .step.done    { background: #f0fff4; color: #276749; }
         .step.error   { background: #fff5f5; color: #c53030; }
+        .step-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
 
-        .step-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
-
-        /* Log */
+        /* ── Log ── */
         #log {
             background: #1a202c;
             color: #a0aec0;
             border-radius: 8px;
-            padding: 16px;
+            padding: 14px;
             font-family: 'Consolas', 'D2Coding', monospace;
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1.6;
-            height: 220px;
+            height: 190px;
             overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-all;
@@ -100,73 +124,255 @@
         #log .log-step { color: #90cdf4; font-weight: bold; }
         #log .log-err  { color: #fc8181; }
 
-        /* Download */
-        #download-card { display: none; }
+        /* ── Right panel ── */
+        .right-col { position: sticky; top: 24px; }
+
+        .results-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            min-height: 300px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 18px 24px 16px;
+            border-bottom: 1px solid #edf2f7;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .panel-header-title { font-size: 14px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; }
+
         .btn-download {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 14px 32px;
-            background: #38a169;
+            gap: 6px;
+            padding: 9px 20px;
+            background: linear-gradient(135deg, #38a169, #2f855a);
             color: white;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 13px;
             font-weight: 700;
             cursor: pointer;
             font-family: inherit;
             text-decoration: none;
             transition: opacity 0.2s;
+            white-space: nowrap;
         }
         .btn-download:hover { opacity: 0.88; }
-        .done-msg { font-size: 14px; color: #718096; margin-top: 10px; }
+        .btn-download.hidden { display: none; }
+
+        /* ── Placeholder ── */
+        .placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 24px;
+            color: #cbd5e0;
+            text-align: center;
+            gap: 12px;
+        }
+        .placeholder-icon { font-size: 40px; }
+        .placeholder p { font-size: 14px; line-height: 1.6; }
+        .placeholder.hidden { display: none; }
+
+        /* ── Content cards ── */
+        #content-cards { padding: 20px 20px 24px; display: none; }
+
+        .kw-section + .kw-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid #edf2f7; }
+        .kw-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #667eea;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 14px;
+        }
+
+        .result-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .result-card:last-child { margin-bottom: 0; }
+
+        .rc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 11px 16px;
+            background: #f7fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .rc-type {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #4a5568;
+        }
+        .rc-icon { font-size: 16px; }
+
+        .btn-copy {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #718096;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s;
+        }
+        .btn-copy:hover { background: #667eea; color: white; border-color: #667eea; }
+        .btn-copy.copied { background: #38a169; color: white; border-color: #38a169; }
+
+        .rc-body { padding: 14px 16px; }
+        .rc-main { font-size: 14px; font-weight: 600; color: #2d3748; line-height: 1.5; margin-bottom: 8px; }
+        .rc-sub  { font-size: 13px; color: #718096; line-height: 1.5; margin-bottom: 8px; }
+        .rc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tag {
+            font-size: 12px;
+            background: #ebf4ff;
+            color: #3182ce;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        /* loading spinner */
+        .loading-cards {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 24px 20px;
+            color: #a0aec0;
+            font-size: 13px;
+        }
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 <div class="container">
 
     <header>
-        <h1>마케팅 자동화 시스템</h1>
-        <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트까지 자동 실행</p>
+        <div>
+            <h1>마케팅 자동화 시스템</h1>
+            <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트까지 자동 실행</p>
+        </div>
     </header>
 
-    <!-- 키워드 입력 -->
-    <div class="card">
-        <h2>키워드 입력</h2>
-        <div class="input-row">
-            <input id="keyword" type="text" placeholder="예: AI 마케팅" />
-            <button class="btn-run" id="btn-run" onclick="startPipeline()">실행</button>
+    <div class="layout">
+
+        <!-- ── 왼쪽: 입력 + 진행 상황 ── -->
+        <div class="left-col">
+
+            <div class="card">
+                <div class="card-title">키워드 입력</div>
+                <div class="input-row">
+                    <input id="keyword" type="text" placeholder="예: AI 마케팅, 디지털 마케팅" />
+                    <button class="btn-run" id="btn-run" onclick="startPipeline()">실행</button>
+                </div>
+            </div>
+
+            <div class="card" id="progress-card">
+                <div class="card-title">진행 상황</div>
+                <div class="steps" id="steps-container">
+                    <!-- JS로 동적 생성 -->
+                </div>
+                <div id="log"></div>
+            </div>
+
         </div>
-    </div>
 
-    <!-- 진행 상황 -->
-    <div class="card" id="progress-card">
-        <h2>진행 상황</h2>
-        <div class="steps">
-            <div class="step" id="step-1"><span class="step-icon">⏳</span> 1/5 &nbsp;수집 (collector)</div>
-            <div class="step" id="step-2"><span class="step-icon">⏳</span> 2/5 &nbsp;분석 (analyzer)</div>
-            <div class="step" id="step-3"><span class="step-icon">⏳</span> 3/5 &nbsp;작성 (writer)</div>
-            <div class="step" id="step-4"><span class="step-icon">⏳</span> 4/5 &nbsp;리포트 (reporter)</div>
-            <div class="step" id="step-5"><span class="step-icon">⏳</span> 5/5 &nbsp;모니터 (monitor)</div>
+        <!-- ── 오른쪽: 결과 ── -->
+        <div class="right-col">
+            <div class="results-panel">
+
+                <div class="panel-header">
+                    <span class="panel-header-title">결과</span>
+                    <a class="btn-download hidden" id="btn-download" href="#">
+                        ⬇ 리포트 PDF
+                    </a>
+                </div>
+
+                <div class="placeholder" id="placeholder">
+                    <div class="placeholder-icon">📊</div>
+                    <p>파이프라인을 실행하면<br>콘텐츠 결과가 여기에 표시됩니다.</p>
+                </div>
+
+                <div id="content-cards"></div>
+
+            </div>
         </div>
-        <div id="log"></div>
-    </div>
 
-    <!-- 다운로드 -->
-    <div class="card" id="download-card">
-        <h2>완료</h2>
-        <a class="btn-download" id="btn-download" href="#">
-            ⬇ 리포트 PDF 다운로드
-        </a>
-        <div class="done-msg" id="done-msg"></div>
     </div>
-
 </div>
 
 <script>
-    const STEP_PREFIXES = ['1/5', '2/5', '3/5', '4/5', '5/5'];
-    let currentStep = 0;
+    // ── 상태 ──
+    const STEPS_DEF = [
+        { id: 'step-collect', label: '수집 (collector)' },
+        { id: 'step-analyze', label: '분석 (analyzer)' },
+        { id: 'step-write',   label: '작성 (writer)' },
+        { id: 'step-report',  label: '리포트 (reporter)' },
+        { id: 'step-monitor', label: '모니터 (monitor)' },
+    ];
+    let currentStepEl = null;
+    let currentKeywords = [];
 
+    // ── 스텝 초기화 ──
+    function initSteps() {
+        const container = document.getElementById('steps-container');
+        container.innerHTML = '';
+        STEPS_DEF.forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'step';
+            div.id = s.id;
+            div.innerHTML = `<span class="step-icon">⏳</span> ${s.label}`;
+            container.appendChild(div);
+        });
+        currentStepEl = null;
+    }
+
+    function setStepByName(name, state) {
+        // 스텝 이름에서 번호 또는 키워드로 매칭
+        const stepMap = {
+            '수집': 'step-collect', 'collector': 'step-collect',
+            '분석': 'step-analyze', 'analyzer': 'step-analyze',
+            '작성': 'step-write',   'writer': 'step-write',
+            '리포트': 'step-report', 'reporter': 'step-report',
+            '모니터': 'step-monitor', 'monitor': 'step-monitor',
+        };
+        let el = null;
+        for (const [key, id] of Object.entries(stepMap)) {
+            if (name.includes(key)) { el = document.getElementById(id); break; }
+        }
+        if (!el) return;
+        el.className = 'step ' + state;
+        const icons = { active: '▶', done: '✓', error: '✗' };
+        el.querySelector('.step-icon').textContent = icons[state] || '⏳';
+        currentStepEl = state === 'active' ? el : currentStepEl;
+    }
+
+    // ── 로그 ──
     function appendLog(text, cls) {
         const log = document.getElementById('log');
         const span = document.createElement('span');
@@ -176,30 +382,27 @@
         log.scrollTop = log.scrollHeight;
     }
 
-    function setStep(stepNum, state) {
-        const el = document.getElementById('step-' + stepNum);
-        if (!el) return;
-        el.className = 'step ' + state;
-        const icons = { active: '▶', done: '✓', error: '✗', '': '⏳' };
-        el.querySelector('.step-icon').textContent = icons[state] || '⏳';
-    }
-
+    // ── 파이프라인 시작 ──
     function startPipeline() {
-        const keyword = document.getElementById('keyword').value.trim();
-        if (!keyword) { alert('키워드를 입력하세요.'); return; }
+        const keywordInput = document.getElementById('keyword').value.trim();
+        if (!keywordInput) { alert('키워드를 입력하세요.'); return; }
 
-        // 초기화
+        currentKeywords = keywordInput.split(',').map(k => k.trim()).filter(Boolean);
+
         document.getElementById('log').innerHTML = '';
         document.getElementById('progress-card').style.display = 'block';
-        document.getElementById('download-card').style.display = 'none';
         document.getElementById('btn-run').disabled = true;
-        currentStep = 0;
-        for (let i = 1; i <= 5; i++) setStep(i, '');
+        document.getElementById('btn-download').classList.add('hidden');
+        document.getElementById('placeholder').classList.remove('hidden');
+        document.getElementById('content-cards').style.display = 'none';
+        document.getElementById('content-cards').innerHTML = '';
+
+        initSteps();
 
         fetch('/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ keyword }),
+            body: JSON.stringify({ keyword: keywordInput }),
         })
         .then(r => r.json())
         .then(({ job_id, error }) => {
@@ -208,6 +411,7 @@
         });
     }
 
+    // ── SSE 스트림 ──
     function listenStream(jobId) {
         const es = new EventSource('/stream/' + jobId);
 
@@ -217,12 +421,11 @@
 
             if (msg.startsWith('STEP:')) {
                 const name = msg.slice(5);
-                // 이전 스텝 완료 처리
-                if (currentStep > 0) setStep(currentStep, 'done');
-                // 현재 스텝 번호 파싱 (1/5 → 1)
-                const match = name.match(/^(\d+)\/5/);
-                currentStep = match ? parseInt(match[1]) : currentStep + 1;
-                setStep(currentStep, 'active');
+                if (currentStepEl) {
+                    currentStepEl.className = 'step done';
+                    currentStepEl.querySelector('.step-icon').textContent = '✓';
+                }
+                setStepByName(name, 'active');
                 appendLog('\n▶ ' + name.trim(), 'log-step');
 
             } else if (msg.startsWith('LOG:')) {
@@ -230,20 +433,24 @@
 
             } else if (msg.startsWith('ERROR:')) {
                 appendLog(msg.slice(6), 'log-err');
-                if (currentStep > 0) setStep(currentStep, 'error');
+                if (currentStepEl) {
+                    currentStepEl.className = 'step error';
+                    currentStepEl.querySelector('.step-icon').textContent = '✗';
+                }
                 es.close();
                 document.getElementById('btn-run').disabled = false;
 
             } else if (msg.startsWith('DONE:')) {
                 const reportDate = msg.slice(5);
-                // 마지막 스텝 완료
-                if (currentStep > 0) setStep(currentStep, 'done');
+                if (currentStepEl) {
+                    currentStepEl.className = 'step done';
+                    currentStepEl.querySelector('.step-icon').textContent = '✓';
+                }
                 es.close();
-                showDownload(reportDate);
+                onDone(reportDate);
                 document.getElementById('btn-run').disabled = false;
 
             } else if (msg === 'DONE') {
-                // 에러로 인한 종료
                 es.close();
                 document.getElementById('btn-run').disabled = false;
             }
@@ -256,16 +463,150 @@
         };
     }
 
-    function showDownload(reportDate) {
-        const card = document.getElementById('download-card');
-        card.style.display = 'block';
-        document.getElementById('btn-download').href = '/download/' + reportDate;
-        document.getElementById('done-msg').textContent =
-            '리포트가 생성됐습니다: output/report_' + reportDate + '.pdf';
+    // ── 완료 처리 ──
+    function onDone(reportDate) {
+        // PDF 버튼
+        const btnDl = document.getElementById('btn-download');
+        btnDl.href = '/download/' + reportDate;
+        btnDl.classList.remove('hidden');
+
+        // 콘텐츠 카드 로딩
+        const cardsEl = document.getElementById('content-cards');
+        document.getElementById('placeholder').classList.add('hidden');
+        cardsEl.style.display = 'block';
+        cardsEl.innerHTML = '<div class="loading-cards"><div class="spinner"></div> 콘텐츠 불러오는 중...</div>';
+
+        // 키워드별 순서대로 fetch
+        const fetches = currentKeywords.map(kw =>
+            fetch(`/result/${reportDate}/${encodeURIComponent(kw)}`)
+                .then(r => r.json())
+                .then(data => ({ kw, data }))
+                .catch(() => ({ kw, data: null }))
+        );
+
+        Promise.all(fetches).then(results => {
+            cardsEl.innerHTML = '';
+            results.forEach(({ kw, data }) => {
+                cardsEl.appendChild(buildKeywordSection(kw, data));
+            });
+        });
     }
 
-    // Enter 키로 실행
-    document.getElementById('keyword').addEventListener('keydown', (e) => {
+    // ── 키워드 섹션 빌드 ──
+    function buildKeywordSection(keyword, data) {
+        const section = document.createElement('div');
+        section.className = 'kw-section';
+
+        if (currentKeywords.length > 1) {
+            const label = document.createElement('div');
+            label.className = 'kw-label';
+            label.textContent = `# ${keyword}`;
+            section.appendChild(label);
+        }
+
+        if (!data || data.error) {
+            const err = document.createElement('div');
+            err.style.cssText = 'font-size:13px;color:#a0aec0;padding:8px 0';
+            err.textContent = '콘텐츠 파일을 찾을 수 없습니다.';
+            section.appendChild(err);
+            return section;
+        }
+
+        const blog = data.naver_blog || {};
+        const insta = data.instagram || {};
+        const ad = data.ad_copy || {};
+
+        // 네이버 블로그
+        const blogCopyText = [
+            blog.title,
+            blog.hashtags ? blog.hashtags.join(' ') : ''
+        ].filter(Boolean).join('\n');
+
+        section.appendChild(buildCard(
+            '📝', '네이버 블로그',
+            blogCopyText,
+            `<div class="rc-main">${esc(blog.title || '')}</div>` +
+            buildTags(blog.hashtags)
+        ));
+
+        // 인스타그램
+        const instaCopyText = [
+            insta.caption,
+            insta.hashtags ? insta.hashtags.join(' ') : ''
+        ].filter(Boolean).join('\n\n');
+
+        section.appendChild(buildCard(
+            '📸', '인스타그램',
+            instaCopyText,
+            `<div class="rc-main">${esc(insta.caption || '')}</div>` +
+            buildTags(insta.hashtags)
+        ));
+
+        // 광고 카피
+        const adCopyText = [ad.headline, ad.subheadline].filter(Boolean).join('\n');
+
+        section.appendChild(buildCard(
+            '📣', '광고 카피',
+            adCopyText,
+            `<div class="rc-main">${esc(ad.headline || '')}</div>` +
+            (ad.subheadline ? `<div class="rc-sub">${esc(ad.subheadline)}</div>` : '')
+        ));
+
+        return section;
+    }
+
+    function buildCard(icon, type, copyText, bodyHtml) {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.innerHTML = `
+            <div class="rc-header">
+                <div class="rc-type">
+                    <span class="rc-icon">${icon}</span>${type}
+                </div>
+                <button class="btn-copy" onclick="copyText(this, ${JSON.stringify(copyText)})">
+                    복사
+                </button>
+            </div>
+            <div class="rc-body">${bodyHtml}</div>
+        `;
+        return card;
+    }
+
+    function buildTags(tags) {
+        if (!tags || !tags.length) return '';
+        return `<div class="rc-tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>`;
+    }
+
+    function esc(str) {
+        return String(str)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── 복사 ──
+    function copyText(btn, text) {
+        navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = '✓ 복사됨';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = '복사';
+                btn.classList.remove('copied');
+            }, 1800);
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            btn.textContent = '✓ 복사됨';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1800);
+        });
+    }
+
+    // Enter 키 실행
+    document.getElementById('keyword').addEventListener('keydown', e => {
         if (e.key === 'Enter') startPipeline();
     });
 </script>
