@@ -84,7 +84,67 @@ def analyze_with_gemini(items: list[dict]) -> dict:
     return json.loads(response_text)
 
 
-def render_html(items: list[dict], analysis: dict, date_str: str) -> str:
+def load_prediction_verification(keyword: str | None) -> dict:
+    data_dir = BASE_DIR / "data"
+    if keyword:
+        safe_kw = re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+        pattern = f"analyzed_{safe_kw}_*.json"
+    else:
+        pattern = "analyzed_*_*.json"
+
+    all_items: list[dict] = []
+    total_hit = 0
+    total_checked = 0
+
+    for f in sorted(data_dir.glob(pattern), reverse=True):
+        with open(f, encoding="utf-8") as fp:
+            data = json.load(fp)
+        pv = data.get("prediction_verification", {})
+        if not pv or pv.get("no_data", True):
+            continue
+        all_items.extend(pv.get("entries", []))
+        total_hit += pv.get("hit_count", 0)
+        total_checked += pv.get("total_checked", 0)
+
+    if not all_items:
+        return {"no_data": True, "entries": [], "hit_count": 0, "total_checked": 0, "hit_rate": 0}
+
+    hit_rate = round(total_hit / total_checked * 100) if total_checked > 0 else 0
+    return {
+        "no_data": False,
+        "hit_count": total_hit,
+        "total_checked": total_checked,
+        "hit_rate": hit_rate,
+        "entries": all_items,
+    }
+
+
+def load_search_trends(keyword: str | None) -> list[dict]:
+    data_dir = BASE_DIR / "data"
+    if keyword:
+        safe_kw = re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+        pattern = f"analyzed_{safe_kw}_*.json"
+    else:
+        pattern = "analyzed_*_*.json"
+    trends: list[dict] = []
+    seen: set[str] = set()
+    for f in sorted(data_dir.glob(pattern), reverse=True):
+        with open(f, encoding="utf-8") as fp:
+            data = json.load(fp)
+        for t in data.get("search_trends", []):
+            if t["keyword"] not in seen:
+                seen.add(t["keyword"])
+                trends.append(t)
+    return trends
+
+
+def render_html(
+    items: list[dict],
+    analysis: dict,
+    date_str: str,
+    search_trends: list[dict] | None = None,
+    prediction_verification: dict | None = None,
+) -> str:
     env = Environment(loader=FileSystemLoader(str(AGENT_DIR)))
     template = env.get_template("template.html")
     return template.render(
@@ -93,6 +153,8 @@ def render_html(items: list[dict], analysis: dict, date_str: str) -> str:
         trend_keywords=analysis["trend_keywords"],
         performance_predictions=analysis["performance_predictions"],
         next_week_keywords=analysis["next_week_keywords"],
+        search_trends=search_trends or [],
+        prediction_verification=prediction_verification or {"no_data": True},
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
 
@@ -132,8 +194,17 @@ def main() -> None:
     print("[reporter] Gemini API 분석 중...")
     analysis = analyze_with_gemini(items)
 
+    search_trends = load_search_trends(args.keyword)
+    print(f"[reporter] 검색량 트렌드: {len(search_trends)}개 키워드")
+
+    prediction_verification = load_prediction_verification(args.keyword)
+    if prediction_verification["no_data"]:
+        print("[reporter] 예측 검증: 데이터 없음 (첫 주 또는 히스토리 없음)")
+    else:
+        print(f"[reporter] 예측 검증: {prediction_verification['hit_count']}/{prediction_verification['total_checked']} 적중 ({prediction_verification['hit_rate']}%)")
+
     print("[reporter] HTML 렌더링 중...")
-    html_content = render_html(items, analysis, args.date)
+    html_content = render_html(items, analysis, args.date, search_trends, prediction_verification)
 
     html_path = OUTPUT_DIR / f"report_{args.date}.html"
     html_path.write_text(html_content, encoding="utf-8")
