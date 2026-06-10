@@ -23,7 +23,7 @@ PYTHON = sys.executable
 jobs: dict[str, dict] = {}
 
 
-def _run_cmd(job_id: str, name: str, script: str, args: list[str]) -> bool:
+def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool = True) -> bool:
     q: queue.Queue = jobs[job_id]["queue"]
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
@@ -47,13 +47,15 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str]) -> bool:
         proc.wait()
         if proc.returncode != 0:
             q.put(f"ERROR:{name} 실패 (종료 코드: {proc.returncode})")
-            jobs[job_id]["status"] = "error"
-            q.put("DONE")
+            if fatal:
+                jobs[job_id]["status"] = "error"
+                q.put("DONE")
             return False
     except Exception as e:
         q.put(f"ERROR:{e}")
-        jobs[job_id]["status"] = "error"
-        q.put("DONE")
+        if fatal:
+            jobs[job_id]["status"] = "error"
+            q.put("DONE")
         return False
     return True
 
@@ -88,6 +90,7 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
             f"포스팅 [{keyword}]",
             "agents/poster/main.py",
             ["--keyword", keyword, "--date", today],
+            fatal=False,
         )
         if not ok:
             jobs[job_id]["queue"].put(

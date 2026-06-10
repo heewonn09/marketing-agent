@@ -441,8 +441,8 @@
                     currentStepEl.className = 'step error';
                     currentStepEl.querySelector('.step-icon').textContent = '✗';
                 }
-                es.close();
-                document.getElementById('btn-run').disabled = false;
+                // 스트림은 닫지 않음 — non-fatal 에러 후 다음 스텝이 이어질 수 있음
+                // 스트림 종료는 DONE 메시지에서만 처리
 
             } else if (msg.startsWith('DONE:')) {
                 const reportDate = msg.slice(5);
