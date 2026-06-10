@@ -81,6 +81,16 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
         if not _run_cmd(job_id, name, script, step_args):
             return
 
+    # 포스팅: 키워드별 순차 (의존성: writer 출력 필요)
+    for keyword in keywords:
+        if not _run_cmd(
+            job_id,
+            f"포스팅 [{keyword}]",
+            "agents/poster/main.py",
+            ["--keyword", keyword, "--date", today],
+        ):
+            return
+
     jobs[job_id]["status"] = "done"
     jobs[job_id]["date"] = today
     jobs[job_id]["queue"].put(f"DONE:{today}")
@@ -93,7 +103,14 @@ def index():
 
 @app.route("/run", methods=["POST"])
 def run():
-    data = request.json or {}
+    # PowerShell 등 일부 클라이언트가 JSON 바디를 cp949로 전송하는 경우 대비
+    # get_data()로 원시 바이트를 받아 UTF-8 강제 디코딩 후 파싱
+    import json as _json
+    try:
+        raw = request.get_data()
+        data = _json.loads(raw.decode("utf-8"))
+    except Exception:
+        data = request.json or {}
     keyword_input = data.get("keywords") or data.get("keyword", "")
     if isinstance(keyword_input, list):
         keywords = [k.strip() for k in keyword_input if k.strip()]

@@ -275,7 +275,7 @@
     <header>
         <div>
             <h1>마케팅 자동화 시스템</h1>
-            <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트까지 자동 실행</p>
+            <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트 → 모니터 → 포스팅까지 자동 실행</p>
         </div>
     </header>
 
@@ -329,11 +329,12 @@
 <script>
     // ── 상태 ──
     const STEPS_DEF = [
-        { id: 'step-collect', label: '수집 (collector)' },
-        { id: 'step-analyze', label: '분석 (analyzer)' },
-        { id: 'step-write',   label: '작성 (writer)' },
-        { id: 'step-report',  label: '리포트 (reporter)' },
-        { id: 'step-monitor', label: '모니터 (monitor)' },
+        { id: 'step-collect', label: '1/6  수집 (collector)' },
+        { id: 'step-analyze', label: '2/6  분석 (analyzer)' },
+        { id: 'step-write',   label: '3/6  작성 (writer)' },
+        { id: 'step-report',  label: '4/6  리포트 (reporter)' },
+        { id: 'step-monitor', label: '5/6  모니터 (monitor)' },
+        { id: 'step-post',    label: '6/6  포스팅 (poster)' },
     ];
     let currentStepEl = null;
     let currentKeywords = [];
@@ -360,6 +361,7 @@
             '작성': 'step-write',   'writer': 'step-write',
             '리포트': 'step-report', 'reporter': 'step-report',
             '모니터': 'step-monitor', 'monitor': 'step-monitor',
+            '포스팅': 'step-post',   'poster': 'step-post',
         };
         let el = null;
         for (const [key, id] of Object.entries(stepMap)) {

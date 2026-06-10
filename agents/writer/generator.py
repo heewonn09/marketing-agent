@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -23,41 +24,45 @@ def build_prompt(data: dict) -> str:
     )
 
     return f"""당신은 전문 한국어 마케팅 콘텐츠 작성자입니다.
-다음 마케팅 분석 데이터를 바탕으로 SNS 콘텐츠 3가지를 한국어로 생성해주세요.
 
-## 키워드
+[핵심 지시사항]
+아래 모든 콘텐츠는 반드시 "{keyword}"를 주제로 작성해야 합니다.
+제목·본문·해시태그 전부 "{keyword}"와 직접 관련된 내용이어야 합니다.
+참고 포스트는 문체·구성 참고용이며, 그 포스트의 주제를 그대로 사용하지 마세요.
+
+## 목표 키워드 (반드시 콘텐츠 주제로 사용)
 {keyword}
 
-## 주요 트렌드
+## 시장 트렌드 (참고)
 {trends}
 
-## 인사이트
+## 인사이트 (참고)
 {insights}
 
-## 핵심 키워드
+## 관련 키워드 (참고)
 {keywords}
 
-## 참고 블로그 포스트
+## 참고 포스트 (문체·구성만 참고, 주제 따르지 말 것)
 {posts}
 
-## 생성 요구사항
+## 출력 형식
 
-다음 JSON 형식으로 정확히 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.
+다음 JSON만 출력하세요. 다른 텍스트 없이 JSON만.
 
 {{
   "naver_blog": {{
-    "title": "블로그 제목 (50자 이내, 검색 최적화 포함)",
-    "body": "블로그 본문 (800~1200자, 소제목과 단락 구분 포함, 전문적이고 유익한 내용)",
-    "hashtags": ["#해시태그1", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5"]
+    "title": "블로그 제목 (50자 이내, '{keyword}' 키워드 포함, 검색 최적화)",
+    "body": "블로그 본문 (800~1200자, '{keyword}' 주제, ## 소제목 포함, 단락 구분)",
+    "hashtags": ["#{keyword.replace(' ', '')}", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5"]
   }},
   "instagram": {{
-    "caption": "인스타그램 캡션 (150자 이내, 이모지 포함, 공감 가는 톤)",
-    "hashtags": ["#해시태그1", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5", "#해시태그6", "#해시태그7", "#해시태그8", "#해시태그9", "#해시태그10"]
+    "caption": "인스타그램 캡션 (150자 이내, '{keyword}' 주제, 이모지 포함)",
+    "hashtags": ["#{keyword.replace(' ', '')}", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5", "#해시태그6", "#해시태그7", "#해시태그8", "#해시태그9", "#해시태그10"]
   }},
   "ad_copy": {{
-    "headline": "광고 헤드라인 (30자 이내, 강렬하고 직접적)",
+    "headline": "광고 헤드라인 (30자 이내, '{keyword}' 관련, 강렬하고 직접적)",
     "subheadline": "서브헤드라인 (50자 이내, 혜택 강조)",
-    "cta": "행동 유도 문구 (15자 이내, 클릭 유도)"
+    "cta": "행동 유도 문구 (15자 이내)"
   }}
 }}"""
 
@@ -81,4 +86,19 @@ def generate_content(analyzed_data: dict) -> dict:
         ),
     )
 
-    return json.loads(response.text)
+    text = response.text.strip()
+    # 마크다운 코드블록 제거
+    text = re.sub(r'^```(?:json)?\s*\n?', '', text)
+    text = re.sub(r'\n?```\s*$', '', text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # 1차: 무효 이스케이프 수정 (\( \% 등 → \\( \\% )
+        # 유효 JSON 이스케이프: \" \\ \/ \b \f \n \r \t \uXXXX
+        fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            # 2차: 리터럴 줄바꿈 허용 (strict=False)
+            return json.loads(fixed, strict=False)
