@@ -36,7 +36,7 @@ def main():
     t_total = time.time()
 
     print(f"\n키워드: {keywords}  |  날짜: {today}")
-    print(f"파이프라인: [병렬] collector → analyzer → [순차] writer → reporter → monitor → poster")
+    print(f"파이프라인: collector → analyzer → writer → reporter → monitor → poster → instagram")
 
     # 1. 수집: 키워드 전체 한 번에 전달 (collector 내부에서 ThreadPoolExecutor 처리)
     t = time.time()
@@ -98,13 +98,25 @@ def main():
             sys.exit(1)
         print(f"  → 포스팅 {time.time() - t:.1f}초")
 
+    # 7. 인스타그램: 키워드별 순차 (의존성: writer 출력 필요)
+    for i, keyword in enumerate(keywords, 1):
+        t = time.time()
+        ok = run_step(
+            f"인스타그램 (instagram) [{i}/{len(keywords)}] — {keyword}",
+            "agents/instagram/main.py",
+            ["--keyword", keyword, "--date", today],
+        )
+        if not ok:
+            sys.exit(1)
+        print(f"  → 인스타그램 {time.time() - t:.1f}초")
+
     total = time.time() - t_total
     print(f"\n{'=' * 60}")
     print(f"  파이프라인 완료!  총 {total:.1f}초")
     print(f"{'=' * 60}")
     print(f"  리포트: output/report_{today}.pdf")
     print(f"  콘텐츠: output/content_*_{today}.json")
-    print(f"  포스팅: 네이버 블로그 발행 완료")
+    print(f"  포스팅: 네이버 블로그 + Instagram 발행 완료")
 
 
 if __name__ == "__main__":

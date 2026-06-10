@@ -91,6 +91,16 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
         ):
             return
 
+    # 인스타그램: 키워드별 순차 (의존성: writer 출력 필요)
+    for keyword in keywords:
+        if not _run_cmd(
+            job_id,
+            f"인스타그램 [{keyword}]",
+            "agents/instagram/main.py",
+            ["--keyword", keyword, "--date", today],
+        ):
+            return
+
     jobs[job_id]["status"] = "done"
     jobs[job_id]["date"] = today
     jobs[job_id]["queue"].put(f"DONE:{today}")

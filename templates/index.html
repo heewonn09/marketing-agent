@@ -275,7 +275,7 @@
     <header>
         <div>
             <h1>마케팅 자동화 시스템</h1>
-            <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트 → 모니터 → 포스팅까지 자동 실행</p>
+            <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트 → 모니터 → 포스팅 → 인스타그램까지 자동 실행</p>
         </div>
     </header>
 
@@ -329,12 +329,13 @@
 <script>
     // ── 상태 ──
     const STEPS_DEF = [
-        { id: 'step-collect', label: '1/6  수집 (collector)' },
-        { id: 'step-analyze', label: '2/6  분석 (analyzer)' },
-        { id: 'step-write',   label: '3/6  작성 (writer)' },
-        { id: 'step-report',  label: '4/6  리포트 (reporter)' },
-        { id: 'step-monitor', label: '5/6  모니터 (monitor)' },
-        { id: 'step-post',    label: '6/6  포스팅 (poster)' },
+        { id: 'step-collect',   label: '1/7  수집 (collector)' },
+        { id: 'step-analyze',   label: '2/7  분석 (analyzer)' },
+        { id: 'step-write',     label: '3/7  작성 (writer)' },
+        { id: 'step-report',    label: '4/7  리포트 (reporter)' },
+        { id: 'step-monitor',   label: '5/7  모니터 (monitor)' },
+        { id: 'step-post',      label: '6/7  포스팅 (poster)' },
+        { id: 'step-instagram', label: '7/7  인스타그램 (instagram)' },
     ];
     let currentStepEl = null;
     let currentKeywords = [];
@@ -356,12 +357,13 @@
     function setStepByName(name, state) {
         // 스텝 이름에서 번호 또는 키워드로 매칭
         const stepMap = {
-            '수집': 'step-collect', 'collector': 'step-collect',
-            '분석': 'step-analyze', 'analyzer': 'step-analyze',
-            '작성': 'step-write',   'writer': 'step-write',
-            '리포트': 'step-report', 'reporter': 'step-report',
-            '모니터': 'step-monitor', 'monitor': 'step-monitor',
-            '포스팅': 'step-post',   'poster': 'step-post',
+            '수집': 'step-collect',     'collector': 'step-collect',
+            '분석': 'step-analyze',     'analyzer': 'step-analyze',
+            '작성': 'step-write',       'writer': 'step-write',
+            '리포트': 'step-report',    'reporter': 'step-report',
+            '모니터': 'step-monitor',   'monitor': 'step-monitor',
+            '포스팅': 'step-post',      'poster': 'step-post',
+            '인스타그램': 'step-instagram', 'instagram': 'step-instagram',
         };
         let el = null;
         for (const [key, id] of Object.entries(stepMap)) {

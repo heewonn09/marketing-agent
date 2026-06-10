@@ -1,0 +1,226 @@
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import date, datetime
+from pathlib import Path
+
+import requests
+from dotenv import load_dotenv
+
+# Windows cp949 콘솔에서 이모지 등 비cp949 문자 출력 오류 방지
+if sys.stdout and hasattr(sys.stdout, 'buffer'):
+    _out = open(sys.stdout.fileno(), mode='wb', closefd=False)
+    def _print(msg: str = "") -> None:
+        _out.write((str(msg) + "\n").encode("utf-8", errors="replace"))
+        _out.flush()
+else:
+    _print = print
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+API_BASE = "https://graph.instagram.com/v21.0"
+UNSPLASH_API = "https://api.unsplash.com/search/photos"
+DEFAULT_IMAGE_URL = os.environ.get(
+    "INSTAGRAM_DEFAULT_IMAGE_URL",
+    "https://images.unsplash.com/photo-1611532736597-de2d4265fba3",
+)
+
+
+def _safe_keyword(keyword: str) -> str:
+    return re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+
+
+def load_content(keyword: str, post_date: str) -> dict:
+    path = ROOT / "output" / f"content_{_safe_keyword(keyword)}_{post_date}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"콘텐츠 파일 없음: {path}")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_error_log(keyword: str, error: str) -> None:
+    log_path = ROOT / "data" / f"instagram_error_{date.today().isoformat()}.json"
+    logs = []
+    if log_path.exists():
+        with open(log_path, encoding="utf-8") as f:
+            logs = json.load(f)
+    logs.append({"keyword": keyword, "error": error, "time": datetime.now().isoformat()})
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(logs, f, ensure_ascii=False, indent=2)
+    _print(f"[ERROR LOG] {log_path}")
+
+
+def _translate_keyword(keyword: str) -> str:
+    """Gemini로 키워드를 Unsplash 검색용 영어 쿼리로 변환."""
+    try:
+        import google.genai as genai
+        from google.genai import types as gtypes
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return keyword
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=f'Translate this Korean marketing keyword to a short English phrase for image search (2-4 words, no explanation): "{keyword}"',
+            config=gtypes.GenerateContentConfig(
+                response_mime_type="text/plain",
+                max_output_tokens=20,
+            ),
+        )
+        translated = resp.text.strip().strip('"').strip("'")
+        _print(f"[unsplash] 키워드 번역: {keyword} → {translated}")
+        return translated
+    except Exception:
+        return keyword
+
+
+def fetch_unsplash_image(keyword: str) -> str:
+    """Unsplash에서 키워드 관련 이미지 URL 반환. 실패 시 DEFAULT_IMAGE_URL 폴백."""
+    access_key = os.environ.get("UNSPLASH_ACCESS_KEY", "")
+    # 미설정이거나 ASCII 범위 밖 문자(한글 플레이스홀더 등) 포함 시 폴백
+    if not access_key or not access_key.isascii():
+        _print("[unsplash] UNSPLASH_ACCESS_KEY 미설정 — 기본 이미지 사용")
+        return DEFAULT_IMAGE_URL
+
+    query = _translate_keyword(keyword)
+
+    try:
+        res = requests.get(
+            UNSPLASH_API,
+            params={"query": query, "per_page": 1, "orientation": "squarish"},
+            headers={"Authorization": f"Client-ID {access_key}"},
+            timeout=10,
+        )
+        if res.ok:
+            results = res.json().get("results", [])
+            if results:
+                url = results[0]["urls"]["regular"]
+                desc = results[0].get("alt_description") or results[0].get("description") or "no description"
+                _print(f"[unsplash] 이미지 검색 성공: {desc[:60]}")
+                _print(f"[unsplash] URL: {url[:80]}...")
+                return url
+        _print(f"[unsplash] 검색 결과 없음 ({res.status_code}) — 기본 이미지 사용")
+    except requests.RequestException as e:
+        _print(f"[unsplash] 요청 실패: {e} — 기본 이미지 사용")
+
+    return DEFAULT_IMAGE_URL
+
+
+def build_caption(ig: dict) -> str:
+    caption = ig.get("caption", "")
+    hashtags = ig.get("hashtags", [])
+    if hashtags:
+        caption = caption.rstrip() + "\n\n" + " ".join(hashtags)
+    return caption
+
+
+def post_instagram(keyword: str, post_date: str) -> None:
+    access_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN")
+    account_id = os.environ.get("INSTAGRAM_ACCOUNT_ID")
+
+    if not access_token:
+        _print("[ERROR] INSTAGRAM_ACCESS_TOKEN 환경변수가 설정되지 않았습니다.")
+        sys.exit(1)
+    if not account_id:
+        _print("[ERROR] INSTAGRAM_ACCOUNT_ID 환경변수가 설정되지 않았습니다.")
+        sys.exit(1)
+
+    _print(f"[instagram] 키워드: {keyword} / 날짜: {post_date}")
+
+    content = load_content(keyword, post_date)
+    ig = content.get("instagram", {})
+    caption = build_caption(ig)
+
+    _print(f"[instagram] 캡션 ({len(caption)}자):\n{caption[:200]}{'...' if len(caption) > 200 else ''}")
+
+    image_url = fetch_unsplash_image(keyword)
+    _print(f"[instagram] 최종 이미지 URL: {image_url[:80]}{'...' if len(image_url) > 80 else ''}")
+
+    try:
+        # Step 1: 미디어 컨테이너 생성
+        _print("\n[1/3] 미디어 컨테이너 생성 중...")
+        res = requests.post(
+            f"{API_BASE}/{account_id}/media",
+            data={
+                "image_url": image_url,
+                "caption": caption,
+                "access_token": access_token,
+            },
+            timeout=30,
+        )
+        if not res.ok:
+            err = res.json().get("error", {})
+            msg = f"미디어 생성 실패 {res.status_code}: {err.get('message', res.text)}"
+            _print(f"[ERROR] {msg}")
+            save_error_log(keyword, msg)
+            sys.exit(1)
+
+        creation_id = res.json().get("id")
+        _print(f"      creation_id: {creation_id}")
+
+        # Step 2: 컨테이너 처리 완료 대기 (FINISHED 상태까지 폴링)
+        import time
+        _print("[2/3] 컨테이너 처리 대기 중...")
+        for attempt in range(12):
+            time.sleep(5)
+            status_res = requests.get(
+                f"{API_BASE}/{creation_id}",
+                params={"fields": "status_code", "access_token": access_token},
+                timeout=15,
+            )
+            if status_res.ok:
+                status_code = status_res.json().get("status_code", "")
+                _print(f"      상태: {status_code} ({attempt + 1}/12)")
+                if status_code == "FINISHED":
+                    break
+                if status_code == "ERROR":
+                    msg = "컨테이너 처리 오류 (status_code=ERROR)"
+                    _print(f"[ERROR] {msg}")
+                    save_error_log(keyword, msg)
+                    sys.exit(1)
+        else:
+            msg = "컨테이너 처리 타임아웃 (60초 초과)"
+            _print(f"[ERROR] {msg}")
+            save_error_log(keyword, msg)
+            sys.exit(1)
+
+        # Step 3: 발행
+        _print("[3/3] 포스트 발행 중...")
+        pub_res = requests.post(
+            f"{API_BASE}/{account_id}/media_publish",
+            data={
+                "creation_id": creation_id,
+                "access_token": access_token,
+            },
+            timeout=30,
+        )
+        if not pub_res.ok:
+            err = pub_res.json().get("error", {})
+            msg = f"발행 실패 {pub_res.status_code}: {err.get('message', pub_res.text)}"
+            _print(f"[ERROR] {msg}")
+            save_error_log(keyword, msg)
+            sys.exit(1)
+
+        media_id = pub_res.json().get("id")
+        _print(f"\n[OK] Instagram 포스팅 완료 — media_id: {media_id}")
+
+    except requests.RequestException as e:
+        msg = f"네트워크 오류: {e}"
+        _print(f"[ERROR] {msg}")
+        save_error_log(keyword, msg)
+        sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Instagram Graph API 자동 포스팅")
+    parser.add_argument("--keyword", required=True, help="포스팅할 키워드")
+    parser.add_argument("--date", default=date.today().isoformat(), help="콘텐츠 날짜 (YYYY-MM-DD)")
+    args = parser.parse_args()
+    post_instagram(args.keyword, args.date)
+
+
+if __name__ == "__main__":
+    main()
