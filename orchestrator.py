@@ -86,7 +86,7 @@ def main():
         sys.exit(1)
     print(f"  → 모니터 {time.time() - t:.1f}초")
 
-    # 6. 포스팅: 키워드별 순차 (의존성: writer 출력 필요)
+    # 6. 포스팅: 실패해도 계속 진행 (VM에서는 네이버 CAPTCHA로 차단될 수 있음)
     for i, keyword in enumerate(keywords, 1):
         t = time.time()
         ok = run_step(
@@ -94,9 +94,10 @@ def main():
             "agents/poster/main.py",
             ["--keyword", keyword, "--date", today],
         )
-        if not ok:
-            sys.exit(1)
-        print(f"  → 포스팅 {time.time() - t:.1f}초")
+        if ok:
+            print(f"  → 포스팅 {time.time() - t:.1f}초")
+        else:
+            print(f"  → 포스팅 실패 (네이버 봇 감지 가능성) — 로컬에서 별도 실행 필요")
 
     # 7. 인스타그램: 키워드별 순차 (의존성: writer 출력 필요)
     for i, keyword in enumerate(keywords, 1):

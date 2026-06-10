@@ -81,15 +81,18 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
         if not _run_cmd(job_id, name, script, step_args):
             return
 
-    # 포스팅: 키워드별 순차 (의존성: writer 출력 필요)
+    # 포스팅: 실패해도 파이프라인 계속 (VM에서는 네이버 CAPTCHA로 차단될 수 있음)
     for keyword in keywords:
-        if not _run_cmd(
+        ok = _run_cmd(
             job_id,
             f"포스팅 [{keyword}]",
             "agents/poster/main.py",
             ["--keyword", keyword, "--date", today],
-        ):
-            return
+        )
+        if not ok:
+            jobs[job_id]["queue"].put(
+                "LOG:[poster] 네이버 봇 감지 또는 로그인 실패 — 로컬에서 별도 실행 필요. 다음 스텝 계속 진행."
+            )
 
     # 인스타그램: 키워드별 순차 (의존성: writer 출력 필요)
     for keyword in keywords:
