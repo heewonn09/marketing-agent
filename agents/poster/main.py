@@ -402,8 +402,11 @@ def main():
     data_dir = _ROOT / "data"
     data_dir.mkdir(exist_ok=True)
 
+    # $DISPLAY 없는 환경(Linux VM 등)에서는 headless 강제 적용
+    headless = args.headless or (not os.environ.get("DISPLAY"))
+
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=args.headless)
+        browser = pw.chromium.launch(headless=headless)
         context = browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
