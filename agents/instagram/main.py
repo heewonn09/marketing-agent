@@ -23,10 +23,12 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 ROOT = Path(__file__).resolve().parent.parent.parent
 API_BASE = "https://graph.instagram.com/v21.0"
 UNSPLASH_API = "https://api.unsplash.com/search/photos"
+# picsum.photos: 안정적인 공개 이미지 서비스, Instagram Graph API 접근 가능
 DEFAULT_IMAGE_URL = os.environ.get(
     "INSTAGRAM_DEFAULT_IMAGE_URL",
-    "https://images.unsplash.com/photo-1611532736597-de2d4265fba3",
+    "https://picsum.photos/1080/1080",
 )
+LAST_RESORT_URL = "https://picsum.photos/1080/1080"
 
 
 def _safe_keyword(keyword: str) -> str:
@@ -77,13 +79,32 @@ def _translate_keyword(keyword: str) -> str:
         return keyword
 
 
+def _check_url_accessible(url: str) -> bool:
+    """HEAD 요청으로 URL이 실제로 접근 가능한지 확인."""
+    try:
+        res = requests.head(url, timeout=8, allow_redirects=True)
+        return res.status_code < 400
+    except requests.RequestException:
+        return False
+
+
+def _pick_accessible_fallback() -> str:
+    """DEFAULT_IMAGE_URL → LAST_RESORT_URL 순서로 접근 가능한 폴백 반환."""
+    if DEFAULT_IMAGE_URL != LAST_RESORT_URL and _check_url_accessible(DEFAULT_IMAGE_URL):
+        _print(f"[image] 폴백 이미지 사용: {DEFAULT_IMAGE_URL}")
+        return DEFAULT_IMAGE_URL
+    _print(f"[image] 최종 폴백 사용: {LAST_RESORT_URL}")
+    return LAST_RESORT_URL
+
+
 def fetch_unsplash_image(keyword: str) -> str:
-    """Unsplash에서 키워드 관련 이미지 URL 반환. 실패 시 DEFAULT_IMAGE_URL 폴백."""
+    """Unsplash에서 키워드 관련 이미지 URL 반환.
+    각 후보 URL은 requests.head()로 접근 가능 여부 확인 후 사용."""
     access_key = os.environ.get("UNSPLASH_ACCESS_KEY", "")
     # 미설정이거나 ASCII 범위 밖 문자(한글 플레이스홀더 등) 포함 시 폴백
     if not access_key or not access_key.isascii():
         _print("[unsplash] UNSPLASH_ACCESS_KEY 미설정 — 기본 이미지 사용")
-        return DEFAULT_IMAGE_URL
+        return _pick_accessible_fallback()
 
     query = _translate_keyword(keyword)
 
@@ -97,16 +118,19 @@ def fetch_unsplash_image(keyword: str) -> str:
         if res.ok:
             results = res.json().get("results", [])
             if results:
-                url = results[0]["urls"]["regular"]
+                candidate = results[0]["urls"]["regular"]
                 desc = results[0].get("alt_description") or results[0].get("description") or "no description"
                 _print(f"[unsplash] 이미지 검색 성공: {desc[:60]}")
-                _print(f"[unsplash] URL: {url[:80]}...")
-                return url
+                _print(f"[unsplash] URL 접근성 확인 중...")
+                if _check_url_accessible(candidate):
+                    _print(f"[unsplash] URL 접근 가능: {candidate[:80]}...")
+                    return candidate
+                _print(f"[unsplash] URL 접근 불가 — 폴백 사용")
         _print(f"[unsplash] 검색 결과 없음 ({res.status_code}) — 기본 이미지 사용")
     except requests.RequestException as e:
         _print(f"[unsplash] 요청 실패: {e} — 기본 이미지 사용")
 
-    return DEFAULT_IMAGE_URL
+    return _pick_accessible_fallback()
 
 
 def build_caption(ig: dict) -> str:
