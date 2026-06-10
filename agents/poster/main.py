@@ -293,15 +293,24 @@ def _insert_html_to_body(page, html: str) -> str:
     return "OK_CLIPBOARD"
 
 
-def post_blog(page, title: str, body: str, naver_id: str):
+def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
     """SmartEditor ONE - 클릭 후 keyboard.type으로 입력."""
     blog_id = naver_id.split("@")[0] if "@" in naver_id else naver_id
-    print(f"블로그 에디터 접속... (blogId={blog_id})")
-    page.goto(
-        f"https://blog.naver.com/PostWriteForm.naver?blogId={blog_id}",
-        wait_until="domcontentloaded",
-        timeout=25000,
-    )
+    editor_url = f"https://blog.naver.com/PostWriteForm.naver?blogId={blog_id}"
+
+    def _goto_editor():
+        print(f"블로그 에디터 접속... (blogId={blog_id})")
+        page.goto(editor_url, wait_until="domcontentloaded", timeout=25000)
+        # 로그인 페이지로 리다이렉트됐으면 재로그인
+        if "nidlogin" in page.url or "nid.naver.com" in page.url:
+            print("쿠키 세션 만료(IP 변경 등) → ID/PW 재로그인 시도...")
+            if not naver_pw:
+                raise RuntimeError("세션 만료 — .env에 NAVER_PW 필요")
+            _do_login(page, naver_id, naver_pw)
+            print("재로그인 후 에디터 재접속...")
+            page.goto(editor_url, wait_until="domcontentloaded", timeout=25000)
+
+    _goto_editor()
 
     # 에디터 완전 로딩 대기
     page.wait_for_selector(".se-container", timeout=15000)
@@ -458,7 +467,7 @@ def main():
             print(f"\n제목: {title}")
             print(f"본문 길이: {len(body)}자\n")
 
-            post_blog(page, title, body, naver_id)
+            post_blog(page, title, body, naver_id, naver_pw)
 
         except Exception as e:
             try:
