@@ -80,6 +80,11 @@ def build_prompt(data: dict) -> str:
     top_keywords = ", ".join(
         k["word"] for k in data.get("keywords", []) if k.get("relevance") == "high"
     )
+    next_week_raw = data.get("next_week_keywords", [])[:2]
+    next_week_kw = ", ".join(
+        item["keyword"] if isinstance(item, dict) else item
+        for item in next_week_raw
+    )
 
     # 검색량 변화 문구
     trend_stat_line = f"현재 검색량 변화율: {change_rate}" if change_rate else "검색량 데이터: 제한적"
@@ -113,6 +118,9 @@ def build_prompt(data: dict) -> str:
 ## 고빈도 연관 키워드
 {top_keywords}
 
+## 다음 주 주목 키워드
+{next_week_kw if next_week_kw else "데이터 없음"}
+
 ## 타겟 독자
 - 주요: {primary_audience}
 - 페인포인트:
@@ -134,8 +142,8 @@ def build_prompt(data: dict) -> str:
     "hashtags": ["#{kw_tag}", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5"]
   }},
   "instagram": {{
-    "caption": "인스타그램 캡션 (200자 이내, 도입: 실제 데이터나 수치 1개, 본문: 핵심 인사이트 2~3줄, 마무리: 팔로우할 이유 명확히 제시, 이모지 자연스럽게 사용)",
-    "hashtags": ["#{kw_tag}", "#해시태그2", "#해시태그3", "#해시태그4", "#해시태그5"]
+    "caption": "인스타그램 캡션 (150~200자. 데이터 애널리스트 인사이트 포스트 스타일. 규칙: ① search_trends의 실제 change_rate 수치를 첫 문장에 활용 ② 검색량 변화는 역발상으로 해석(하락=경쟁 감소=진입 기회, 상승=경쟁 심화=타이밍 재고) ③ trend_summary 핵심 인사이트 1줄 추출 ④ 다음 주 주목 키워드 1~2개 자연스럽게 언급 ⑤ 이모지 최대 3개 ⑥ '일상 탈출' '지금 바로' '강력 추천' 등 뻔한 표현 절대 금지 ⑦ 마지막 줄은 반드시 '매주 월요일 네이버 실시간 데이터 기반 분석' 형식의 팔로우 이유로 마무리)",
+    "hashtags": ["#{kw_tag}", "#해시태그2", "#해시태그3"]
   }},
   "ad_copy": {{
     "headline": "광고 헤드라인 (30자 이내, 타겟: {primary_audience.split('(')[0].strip().split(',')[0].strip()}, 구체적 수치 포함, 모호한 표현 금지)",
