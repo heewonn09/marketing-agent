@@ -126,7 +126,7 @@ def make_slide1(data: dict) -> Image.Image:
     # 키워드 (큰 텍스트, 줄바꿈)
     kw_font = _find_font(76, bold=True)
     lines = _wrap(keyword, kw_font, SIZE - MARGIN * 2)
-    y = 300
+    y = 200
     for line in lines:
         y = _draw_centered(draw, y, line, kw_font, C_WHITE)
 
