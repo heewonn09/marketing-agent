@@ -31,22 +31,30 @@ def _safe_keyword(keyword: str) -> str:
 
 
 def _find_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    paths = (
-        [
-            "C:/Windows/Fonts/malgunbd.ttf",
-            "C:/Windows/Fonts/malgun.ttf",
-            "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-            "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    import sys
+    if sys.platform == "win32":
+        paths = (
+            ["C:/Windows/Fonts/malgunbd.ttf", "C:/Windows/Fonts/malgun.ttf"]
+            if bold
+            else ["C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/gulim.ttc"]
+        ) + [
+            "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf" if bold
+            else "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
         ]
-        if bold
-        else [
-            "C:/Windows/Fonts/malgun.ttf",
-            "C:/Windows/Fonts/gulim.ttc",
-            "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        ]
-    )
+    else:
+        paths = (
+            [
+                "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+                "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            ]
+            if bold
+            else [
+                "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+                "/usr/share/fonts/truetype/nanum/NanumGothicLight.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            ]
+        )
     for p in paths:
         if Path(p).exists():
             try:
