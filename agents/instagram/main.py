@@ -5,6 +5,7 @@ import re
 import sys
 from datetime import date, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from dotenv import load_dotenv
@@ -260,7 +261,7 @@ def post_carousel(keyword: str, post_date: str) -> None:
 
     safe_kw = _safe_keyword(keyword)
     image_urls = [
-        f"{base_url}/cardnews/cardnews_{safe_kw}_{post_date}_{i}.png"
+        f"{base_url}/cardnews/{quote(f'cardnews_{safe_kw}_{post_date}_{i}.png')}"
         for i in range(1, 5)
     ]
 

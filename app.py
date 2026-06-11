@@ -200,7 +200,7 @@ def result(report_date: str, keyword: str):
 def serve_cardnews(filename: str):
     """생성된 카드뉴스 PNG를 공개 URL로 서빙 (Instagram carousel image_url용)."""
     import re as _re
-    safe = _re.sub(r'[^a-zA-Z0-9가-힣._\-]', '', filename)
+    safe = _re.sub(r'[^a-zA-Z0-9가-힣 ._\-]', '', filename)
     img_path = ROOT / "output" / safe
     if not img_path.exists() or img_path.suffix.lower() not in (".png", ".jpg", ".jpeg"):
         return "이미지를 찾을 수 없습니다", 404
