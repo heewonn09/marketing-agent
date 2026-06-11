@@ -111,14 +111,20 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
                 "LOG:[poster] 네이버 봇 감지 또는 로그인 실패 — 로컬에서 별도 실행 필요. 다음 스텝 계속 진행."
             )
 
-    # 인스타그램: 키워드별 순차 (의존성: writer 출력 필요)
+    # 인스타그램: 카드뉴스 4장이 모두 있으면 캐러셀, 없으면 단일 이미지
+    import re as _re
     for keyword in keywords:
-        if not _run_cmd(
-            job_id,
-            f"인스타그램 [{keyword}]",
-            "agents/instagram/main.py",
-            ["--keyword", keyword, "--date", today],
-        ):
+        safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+        cardnews_ready = all(
+            (ROOT / "output" / f"cardnews_{safe_kw}_{today}_{i}.png").exists()
+            for i in range(1, 5)
+        )
+        ig_args = ["--keyword", keyword, "--date", today]
+        if cardnews_ready:
+            ig_args.append("--carousel")
+            jobs[job_id]["queue"].put(f"LOG:[instagram] 카드뉴스 4장 감지 → 캐러셀 업로드")
+        if not _run_cmd(job_id, f"인스타그램 [{keyword}]",
+                        "agents/instagram/main.py", ig_args):
             return
 
     jobs[job_id]["status"] = "done"
