@@ -83,6 +83,20 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
         if not _run_cmd(job_id, name, script, step_args):
             return
 
+    # 카드뉴스 생성: 실패해도 파이프라인 계속 (의존성: analyzer 출력)
+    for keyword in keywords:
+        ok = _run_cmd(
+            job_id,
+            f"카드뉴스 [{keyword}]",
+            "agents/cardnews/main.py",
+            ["--keyword", keyword, "--date", today],
+            fatal=False,
+        )
+        if not ok:
+            jobs[job_id]["queue"].put(
+                "LOG:[cardnews] 카드뉴스 생성 실패 — 다음 스텝 계속 진행."
+            )
+
     # 포스팅: 실패해도 파이프라인 계속 (VM에서는 네이버 CAPTCHA로 차단될 수 있음)
     for keyword in keywords:
         ok = _run_cmd(
