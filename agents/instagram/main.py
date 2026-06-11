@@ -238,12 +238,135 @@ def post_instagram(keyword: str, post_date: str) -> None:
         sys.exit(1)
 
 
+def post_carousel(keyword: str, post_date: str) -> None:
+    """카드뉴스 4장을 Instagram 캐러셀로 업로드.
+
+    CARDNEWS_BASE_URL 환경변수로 이미지 공개 URL의 베이스를 지정한다.
+    Instagram Graph API는 외부에서 접근 가능한 URL을 요구하므로,
+    VM Flask 서버가 /cardnews/<filename> 라우트를 통해 이미지를 서빙해야 한다.
+    """
+    import time
+
+    access_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN")
+    account_id   = os.environ.get("INSTAGRAM_ACCOUNT_ID")
+    base_url     = os.environ.get("CARDNEWS_BASE_URL", "http://34.11.175.125:5000").rstrip("/")
+
+    if not access_token:
+        _print("[ERROR] INSTAGRAM_ACCESS_TOKEN 환경변수가 설정되지 않았습니다.")
+        sys.exit(1)
+    if not account_id:
+        _print("[ERROR] INSTAGRAM_ACCOUNT_ID 환경변수가 설정되지 않았습니다.")
+        sys.exit(1)
+
+    safe_kw = _safe_keyword(keyword)
+    image_urls = [
+        f"{base_url}/cardnews/cardnews_{safe_kw}_{post_date}_{i}.png"
+        for i in range(1, 5)
+    ]
+
+    _print(f"[carousel] 키워드: {keyword} / 날짜: {post_date}")
+    _print("[carousel] 이미지 URL:")
+    for url in image_urls:
+        _print(f"  {url}")
+
+    # Step 1: 각 이미지 item container 생성
+    item_ids: list[str] = []
+    for idx, url in enumerate(image_urls, start=1):
+        _print(f"\n[1/4-{idx}] item container 생성 중...")
+        res = requests.post(
+            f"{API_BASE}/{account_id}/media",
+            data={"image_url": url, "is_carousel_item": "true",
+                  "access_token": access_token},
+            timeout=30,
+        )
+        if not res.ok:
+            err = res.json().get("error", {})
+            msg = f"item {idx} 생성 실패 {res.status_code}: {err.get('message', res.text)}"
+            _print(f"[ERROR] {msg}")
+            save_error_log(keyword, msg)
+            sys.exit(1)
+        item_id = res.json().get("id")
+        item_ids.append(item_id)
+        _print(f"      item_id: {item_id}")
+
+    # Step 2: 캐러셀 컨테이너 생성 (캡션 포함)
+    content = load_content(keyword, post_date)
+    caption = build_caption(content.get("instagram", {}))
+
+    _print("\n[2/3] 캐러셀 컨테이너 생성 중...")
+    res = requests.post(
+        f"{API_BASE}/{account_id}/media",
+        data={
+            "media_type": "CAROUSEL",
+            "children": ",".join(item_ids),
+            "caption": caption,
+            "access_token": access_token,
+        },
+        timeout=30,
+    )
+    if not res.ok:
+        err = res.json().get("error", {})
+        msg = f"캐러셀 생성 실패 {res.status_code}: {err.get('message', res.text)}"
+        _print(f"[ERROR] {msg}")
+        save_error_log(keyword, msg)
+        sys.exit(1)
+    carousel_id = res.json().get("id")
+    _print(f"      carousel_id: {carousel_id}")
+
+    # Step 3: FINISHED 상태 대기
+    _print("[carousel] 처리 대기 중...")
+    for attempt in range(12):
+        time.sleep(5)
+        status_res = requests.get(
+            f"{API_BASE}/{carousel_id}",
+            params={"fields": "status_code", "access_token": access_token},
+            timeout=15,
+        )
+        if status_res.ok:
+            status_code = status_res.json().get("status_code", "")
+            _print(f"      상태: {status_code} ({attempt + 1}/12)")
+            if status_code == "FINISHED":
+                break
+            if status_code == "ERROR":
+                msg = "캐러셀 처리 오류 (status_code=ERROR)"
+                _print(f"[ERROR] {msg}")
+                save_error_log(keyword, msg)
+                sys.exit(1)
+    else:
+        msg = "캐러셀 처리 타임아웃"
+        _print(f"[ERROR] {msg}")
+        save_error_log(keyword, msg)
+        sys.exit(1)
+
+    # Step 4: 발행
+    _print("[3/3] 캐러셀 발행 중...")
+    pub_res = requests.post(
+        f"{API_BASE}/{account_id}/media_publish",
+        data={"creation_id": carousel_id, "access_token": access_token},
+        timeout=30,
+    )
+    if not pub_res.ok:
+        err = pub_res.json().get("error", {})
+        msg = f"발행 실패 {pub_res.status_code}: {err.get('message', pub_res.text)}"
+        _print(f"[ERROR] {msg}")
+        save_error_log(keyword, msg)
+        sys.exit(1)
+
+    media_id = pub_res.json().get("id")
+    _print(f"\n[OK] Instagram 캐러셀 업로드 완료 — media_id: {media_id}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Instagram Graph API 자동 포스팅")
     parser.add_argument("--keyword", required=True, help="포스팅할 키워드")
     parser.add_argument("--date", default=date.today().isoformat(), help="콘텐츠 날짜 (YYYY-MM-DD)")
+    parser.add_argument("--carousel", action="store_true",
+                        help="카드뉴스 4장을 캐러셀로 업로드 (단일 이미지 대신)")
     args = parser.parse_args()
-    post_instagram(args.keyword, args.date)
+    if args.carousel:
+        post_carousel(args.keyword, args.date)
+    else:
+        post_instagram(args.keyword, args.date)
 
 
 if __name__ == "__main__":
