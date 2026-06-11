@@ -284,13 +284,11 @@ def make_slide4(data: dict) -> Image.Image:
     _draw_centered(draw, 190, "마케팅 인사이트가 자동으로", _find_font(44, bold=True), C_WHITE)
 
     # 박스 내 텍스트
-    y = by + 50
+    y = by + 80
     y = _draw_centered(draw, y, "매주 월요일", _find_font(54, bold=True), C_WHITE)
-    y = _draw_centered(draw, y + 4, "네이버 실시간 데이터 분석", _find_font(40), C_ACCENT_LITE)
-    y += 36
-    y = _draw_centered(draw, y, "@auto.markai", _find_font(52, bold=True), C_WHITE)
-    y += 16
-    _draw_centered(draw, y, "http://34.11.175.125:5000", _find_font(28), C_ACCENT_LITE)
+    y = _draw_centered(draw, y + 4, "네이버 데이터 분석", _find_font(40), C_ACCENT_LITE)
+    y += 50
+    _draw_centered(draw, y, "@auto.markai 팔로우", _find_font(52, bold=True), C_WHITE)
 
     # 하단 점 인디케이터
     for j in range(4):
