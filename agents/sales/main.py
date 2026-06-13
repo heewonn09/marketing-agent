@@ -1,0 +1,202 @@
+import json
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import requests
+from duckduckgo_search import DDGS
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = ROOT / "data"
+
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_SKIP_DOMAINS = {
+    "example.com", "sentry.io", "wix.com", "wordpress.com",
+    "naver.com", "kakao.com", "gmail.com", "nate.com",
+}
+
+SEARCH_QUERIES = [
+    "소규모 마케팅 대행사 이메일 contact",
+    "마케팅 대행사 문의 이메일 site:.kr",
+    "디지털마케팅 대행사 이메일 소규모",
+    "콘텐츠 마케팅 대행사 이메일 직원 10인",
+]
+
+LEADS_PATH = DATA_DIR / "sales_leads.json"
+SENT_PATH = DATA_DIR / "sales_sent.json"
+
+
+def extract_emails_from_text(text: str) -> list[str]:
+    found = _EMAIL_RE.findall(text)
+    return [e for e in found if e.split("@")[-1] not in _SKIP_DOMAINS]
+
+
+def extract_emails_from_url(url: str, timeout: int = 6) -> list[str]:
+    try:
+        resp = requests.get(
+            url,
+            timeout=timeout,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; SalesBot/1.0)"},
+        )
+        return list(set(extract_emails_from_text(resp.text)))
+    except Exception:
+        return []
+
+
+def search_leads(queries: list[str], max_results: int = 10) -> list[dict]:
+    raw: list[dict] = []
+    with DDGS() as ddgs:
+        for query in queries:
+            for r in ddgs.text(query, region="kr-kr", max_results=max_results):
+                raw.append({
+                    "name": r.get("title", "").strip(),
+                    "website": r.get("href", ""),
+                    "snippet": r.get("body", ""),
+                })
+    return raw
+
+
+def build_leads(raw: list[dict]) -> list[dict]:
+    seen_emails: set[str] = set()
+    leads: list[dict] = []
+
+    for item in raw:
+        emails = extract_emails_from_text(item["snippet"])
+        if not emails:
+            emails = extract_emails_from_url(item["website"])
+
+        for email in emails:
+            if email in seen_emails:
+                continue
+            seen_emails.add(email)
+            leads.append({
+                "name": item["name"],
+                "email": email,
+                "website": item["website"],
+                "found_at": datetime.now().isoformat(),
+            })
+
+    return leads
+
+
+def save_leads(leads: list[dict], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(leads, f, ensure_ascii=False, indent=2)
+
+
+def load_leads(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_sent(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return set(json.load(f))
+
+
+def mark_sent(email: str, path: Path) -> None:
+    sent = load_sent(path)
+    sent.add(email)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(sorted(sent), f, ensure_ascii=False, indent=2)
+
+
+def build_email_body(company_name: str) -> str:
+    return f"""안녕하세요, {company_name} 담당자님.
+
+저희는 매주 네이버 실시간 데이터를 기반으로 마케팅 트렌드 리포트를 자동 생성하는 auto.markai 팀입니다.
+
+소규모 마케팅 대행사를 위한 주간 리포트 샘플을 첨부해 드립니다.
+실시간 트렌드 키워드, 콘텐츠 퍼포먼스 예측, 다음 주 공략 키워드 등을 포함하고 있습니다.
+
+관심 있으시면 편하게 회신 주시면 감사하겠습니다.
+
+---
+auto.markai | 마케팅 인사이트 자동화
+"""
+
+
+def find_latest_report(output_dir: Path) -> Path | None:
+    pdfs = sorted(output_dir.glob("report_*.pdf"), reverse=True)
+    return pdfs[0] if pdfs else None
+
+
+def _run_search() -> list[dict]:
+    print(f"[sales] 리드 탐색 시작 ({len(SEARCH_QUERIES)}개 쿼리)...")
+    raw = search_leads(SEARCH_QUERIES, max_results=8)
+    print(f"[sales] 원시 결과: {len(raw)}건 → 이메일 추출 중...")
+    leads = build_leads(raw)
+    save_leads(leads, LEADS_PATH)
+    print(f"[sales] 리드 저장 완료: {len(leads)}건 → {LEADS_PATH}")
+    for lead in leads:
+        print(f"  {lead['name']} | {lead['email']} | {lead['website']}")
+    return leads
+
+
+def _run_send() -> None:
+    from utils.email_sender import send_email
+
+    leads = load_leads(LEADS_PATH)
+    if not leads:
+        print("[sales] 리드 없음. --search 먼저 실행하세요.", file=sys.stderr)
+        return
+
+    report = find_latest_report(ROOT / "output")
+    if not report:
+        print("[sales] output/report_*.pdf 파일 없음. reporter 에이전트를 먼저 실행하세요.", file=sys.stderr)
+        return
+
+    sent = load_sent(SENT_PATH)
+    sent_count = 0
+
+    for lead in leads:
+        email = lead["email"]
+        if email in sent:
+            print(f"[sales] 건너뜀 (이미 발송): {email}")
+            continue
+
+        subject = f"[auto.markai] {lead['name']} 마케팅 트렌드 리포트 샘플 드립니다"
+        body = build_email_body(lead["name"])
+
+        try:
+            send_email(to=email, subject=subject, body=body, attachment_path=report)
+            mark_sent(email, SENT_PATH)
+            print(f"[sales] 발송 완료: {email}")
+            sent_count += 1
+        except Exception as e:
+            print(f"[sales] 발송 실패 ({email}): {e}", file=sys.stderr)
+
+    print(f"[sales] 발송 완료: {sent_count}건 / 전체 {len(leads)}건")
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="영업 자동화 에이전트")
+    parser.add_argument("--search", action="store_true", help="잠재 고객 탐색")
+    parser.add_argument("--send", action="store_true", help="영업 이메일 발송")
+    args = parser.parse_args()
+
+    if not args.search and not args.send:
+        parser.print_help()
+        sys.exit(0)
+
+    if args.search:
+        _run_search()
+
+    if args.send:
+        _run_send()
+
+
+if __name__ == "__main__":
+    main()
