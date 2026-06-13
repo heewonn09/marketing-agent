@@ -14,25 +14,39 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = ROOT / "data"
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
-_SKIP_DOMAINS = {
+_SKIP_EMAIL_DOMAINS = {
     "example.com", "sentry.io", "wix.com", "wordpress.com",
     "naver.com", "kakao.com", "gmail.com", "nate.com",
+    "wordnik.com", "wordnik.social", "namu.wiki",
+    "cambridge.org", "wikipedia.org",
 }
+_SKIP_NAME_PATTERNS = re.compile(r"\.(png|jpg|jpeg|gif|svg|webp|ico)$", re.I)
 
 SEARCH_QUERIES = [
-    "소규모 마케팅 대행사 이메일 contact",
-    "마케팅 대행사 문의 이메일 site:.kr",
-    "디지털마케팅 대행사 이메일 소규모",
-    "콘텐츠 마케팅 대행사 이메일 직원 10인",
+    "마케팅 대행사 이메일 문의 서울 site:kr",
+    "디지털 마케팅 대행사 contact email site:co.kr",
+    "광고 대행사 소규모 이메일 한국 문의",
+    "콘텐츠 마케팅 에이전시 이메일 담당자 site:kr",
 ]
 
 LEADS_PATH = DATA_DIR / "sales_leads.json"
 SENT_PATH = DATA_DIR / "sales_sent.json"
 
 
+def _out(msg: str) -> None:
+    sys.stdout.buffer.write((msg + "\n").encode("utf-8", errors="replace"))
+    sys.stdout.buffer.flush()
+
+
+def _is_kr_site(url: str) -> bool:
+    from urllib.parse import urlparse
+    host = urlparse(url).hostname or ""
+    return host.endswith(".kr")
+
+
 def extract_emails_from_text(text: str) -> list[str]:
     found = _EMAIL_RE.findall(text)
-    return [e for e in found if e.split("@")[-1] not in _SKIP_DOMAINS]
+    return [e for e in found if e.split("@")[-1] not in _SKIP_EMAIL_DOMAINS]
 
 
 def extract_emails_from_url(url: str, timeout: int = 6) -> list[str]:
@@ -65,6 +79,11 @@ def build_leads(raw: list[dict]) -> list[dict]:
     leads: list[dict] = []
 
     for item in raw:
+        if _SKIP_NAME_PATTERNS.search(item["name"]):
+            continue
+        if not _is_kr_site(item["website"]):
+            continue
+
         emails = extract_emails_from_text(item["snippet"])
         if not emails:
             emails = extract_emails_from_url(item["website"])
@@ -132,14 +151,14 @@ def find_latest_report(output_dir: Path) -> Path | None:
 
 
 def _run_search() -> list[dict]:
-    print(f"[sales] 리드 탐색 시작 ({len(SEARCH_QUERIES)}개 쿼리)...")
+    _out(f"[sales] 리드 탐색 시작 ({len(SEARCH_QUERIES)}개 쿼리)...")
     raw = search_leads(SEARCH_QUERIES, max_results=8)
-    print(f"[sales] 원시 결과: {len(raw)}건 → 이메일 추출 중...")
+    _out(f"[sales] 원시 결과: {len(raw)}건 → 이메일 추출 중...")
     leads = build_leads(raw)
     save_leads(leads, LEADS_PATH)
-    print(f"[sales] 리드 저장 완료: {len(leads)}건 → {LEADS_PATH}")
+    _out(f"[sales] 리드 저장 완료: {len(leads)}건 → {str(LEADS_PATH)}")
     for lead in leads:
-        print(f"  {lead['name']} | {lead['email']} | {lead['website']}")
+        _out(f"  {lead['name']} | {lead['email']} | {lead['website']}")
     return leads
 
 
