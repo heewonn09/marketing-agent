@@ -1,13 +1,17 @@
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date, datetime
 from pathlib import Path
 
+import google.genai as genai
+from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(ROOT / ".env")
 
 # ── 색상 ─────────────────────────────────────────────────────────────────────
 C_GRAD_TOP    = (102, 126, 234)   # #667eea
@@ -24,6 +28,22 @@ C_DIVIDER     = (220, 215, 240)
 
 SIZE   = 1080
 MARGIN = 72
+
+
+def _gemini_one_liner(text: str) -> str:
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key or not text.strip():
+        return (text[:38] + "…") if len(text) > 38 else text
+    try:
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=f"다음 텍스트를 한국어 20자 이내 1줄로 요약하세요. 요약문만 출력하세요:\n{text}",
+        )
+        summary = resp.text.strip()
+        return (summary[:38] + "…") if len(summary) > 38 else summary
+    except Exception:
+        return (text[:38] + "…") if len(text) > 38 else text
 
 
 def _safe_keyword(keyword: str) -> str:
@@ -201,12 +221,12 @@ def make_slide2(data: dict) -> Image.Image:
         tx = MARGIN + 86
         draw.text((tx, y0 + 6), title_text, font=title_font, fill=C_DARK)
 
-        # 설명: 콜론 뒤 텍스트만 추출해 40자 + "..." 처리
+        # 설명: 콜론 뒤 텍스트를 Gemini 1줄 요약으로 교체
         if ":" in trend:
             desc_raw = trend.split(":", 1)[1].strip()
         else:
             desc_raw = trend
-        desc_text = (desc_raw[:40] + "...") if len(desc_raw) > 40 else desc_raw
+        desc_text = _gemini_one_liner(desc_raw)
         desc_lines = _wrap(desc_text, desc_font, SIZE - tx - MARGIN)[:2]
         dy = y0 + 54
         for line in desc_lines:
