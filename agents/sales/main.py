@@ -13,6 +13,9 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = ROOT / "data"
 
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 _SKIP_EMAIL_DOMAINS = {
     "example.com", "sentry.io", "wix.com", "wordpress.com",
@@ -162,40 +165,53 @@ def _run_search() -> list[dict]:
     return leads
 
 
-def _run_send() -> None:
+def _run_send(dry_run: bool = False) -> None:
     from utils.email_sender import send_email
 
     leads = load_leads(LEADS_PATH)
     if not leads:
-        print("[sales] 리드 없음. --search 먼저 실행하세요.", file=sys.stderr)
+        _out("[sales] 리드 없음. --search 먼저 실행하세요.")
         return
 
     report = find_latest_report(ROOT / "output")
     if not report:
-        print("[sales] output/report_*.pdf 파일 없음. reporter 에이전트를 먼저 실행하세요.", file=sys.stderr)
+        _out("[sales] output/report_*.pdf 파일 없음. reporter 에이전트를 먼저 실행하세요.")
         return
 
     sent = load_sent(SENT_PATH)
     sent_count = 0
 
-    for lead in leads:
+    for i, lead in enumerate(leads, 1):
         email = lead["email"]
-        if email in sent:
-            print(f"[sales] 건너뜀 (이미 발송): {email}")
-            continue
-
         subject = f"[auto.markai] {lead['name']} 마케팅 트렌드 리포트 샘플 드립니다"
         body = build_email_body(lead["name"])
+
+        if dry_run:
+            _out(f"\n{'='*60}")
+            _out(f"[{i}/{len(leads)}] DRY-RUN — 실제 발송 안 함")
+            _out(f"  To     : {email}")
+            _out(f"  Subject: {subject}")
+            _out(f"  Report : {report.name}")
+            _out(f"  Body:\n{body}")
+            continue
+
+        if email in sent:
+            _out(f"[sales] 건너뜀 (이미 발송): {email}")
+            continue
 
         try:
             send_email(to=email, subject=subject, body=body, attachment_path=report)
             mark_sent(email, SENT_PATH)
-            print(f"[sales] 발송 완료: {email}")
+            _out(f"[sales] 발송 완료: {email}")
             sent_count += 1
         except Exception as e:
-            print(f"[sales] 발송 실패 ({email}): {e}", file=sys.stderr)
+            _out(f"[sales] 발송 실패 ({email}): {e}")
 
-    print(f"[sales] 발송 완료: {sent_count}건 / 전체 {len(leads)}건")
+    if dry_run:
+        _out(f"\n{'='*60}")
+        _out(f"[DRY-RUN] 총 {len(leads)}건 미리보기 완료. 실제 발송하려면 --dry-run 없이 실행하세요.")
+    else:
+        _out(f"[sales] 발송 완료: {sent_count}건 / 전체 {len(leads)}건")
 
 
 def main() -> None:
@@ -204,6 +220,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="영업 자동화 에이전트")
     parser.add_argument("--search", action="store_true", help="잠재 고객 탐색")
     parser.add_argument("--send", action="store_true", help="영업 이메일 발송")
+    parser.add_argument("--dry-run", action="store_true", help="이메일 내용 미리보기 (실제 발송 안 함)")
     args = parser.parse_args()
 
     if not args.search and not args.send:
@@ -214,7 +231,7 @@ def main() -> None:
         _run_search()
 
     if args.send:
-        _run_send()
+        _run_send(dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
