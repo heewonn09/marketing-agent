@@ -201,8 +201,13 @@ def make_slide2(data: dict) -> Image.Image:
         tx = MARGIN + 86
         draw.text((tx, y0 + 6), title_text, font=title_font, fill=C_DARK)
 
-        # 설명: 2줄
-        desc_lines = _wrap(trend, desc_font, SIZE - tx - MARGIN)[:2]
+        # 설명: 콜론 뒤 텍스트만 추출해 40자 + "..." 처리
+        if ":" in trend:
+            desc_raw = trend.split(":", 1)[1].strip()
+        else:
+            desc_raw = trend
+        desc_text = (desc_raw[:40] + "...") if len(desc_raw) > 40 else desc_raw
+        desc_lines = _wrap(desc_text, desc_font, SIZE - tx - MARGIN)[:2]
         dy = y0 + 54
         for line in desc_lines:
             draw.text((tx, dy), line, font=desc_font, fill=C_MID)
