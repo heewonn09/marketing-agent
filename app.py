@@ -1,3 +1,4 @@
+import base64
 import os
 import queue
 import subprocess
@@ -14,13 +15,44 @@ from flask import Flask, Response, jsonify, render_template, request, send_file
 
 load_dotenv(Path(__file__).parent / ".env")
 
+sys.path.insert(0, str(Path(__file__).parent))
+from utils.job_store import init_db, upsert_job
+from utils.cleanup import cleanup_old_files
+
 app = Flask(__name__)
 
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
 
+ADMIN_USER = os.environ.get("ADMIN_USER", "")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+_AUTH_EXEMPT = ("/stream/",)  # SSE는 job_id가 추측 불가 토큰 역할
+
 # job_id -> {status, queue, date}
 jobs: dict[str, dict] = {}
+
+init_db(ROOT / "data" / "jobs.db")
+
+
+@app.before_request
+def _require_auth():
+    if not ADMIN_USER or not ADMIN_PASSWORD:
+        return  # 미설정 시 인증 생략 (로컬 개발)
+    if any(request.path.startswith(p) for p in _AUTH_EXEMPT):
+        return
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Basic "):
+        try:
+            user, pwd = base64.b64decode(auth[6:]).decode().split(":", 1)
+            if user == ADMIN_USER and pwd == ADMIN_PASSWORD:
+                return
+        except Exception:
+            pass
+    return Response(
+        "인증이 필요합니다",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Marketing Agent"'},
+    )
 
 
 def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool = True) -> bool:
@@ -49,12 +81,14 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
             q.put(f"ERROR:{name} 실패 (종료 코드: {proc.returncode})")
             if fatal:
                 jobs[job_id]["status"] = "error"
+                upsert_job(job_id, "error")
                 q.put("DONE")
             return False
     except Exception as e:
         q.put(f"ERROR:{e}")
         if fatal:
             jobs[job_id]["status"] = "error"
+            upsert_job(job_id, "error")
             q.put("DONE")
         return False
     return True
@@ -129,6 +163,7 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
 
     jobs[job_id]["status"] = "done"
     jobs[job_id]["date"] = today
+    upsert_job(job_id, "done", keywords, today)
     jobs[job_id]["queue"].put(f"DONE:{today}")
 
 
@@ -158,6 +193,7 @@ def run():
 
     job_id = uuid.uuid4().hex[:8]
     jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None}
+    upsert_job(job_id, "running", keywords)
     threading.Thread(target=run_pipeline, args=(job_id, keywords), daemon=True).start()
     return jsonify({"job_id": job_id})
 
@@ -228,11 +264,23 @@ def scheduled_run():
     print(f"[scheduler] 자동 실행 시작: {keywords}")
     job_id = uuid.uuid4().hex[:8]
     jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None}
+    upsert_job(job_id, "running", keywords)
     threading.Thread(target=run_pipeline, args=(job_id, keywords), daemon=True).start()
+
+
+def _run_cleanup():
+    deleted = cleanup_old_files(ROOT)
+    if deleted:
+        names = [f.name for f in deleted[:5]]
+        extra = f" 외 {len(deleted) - 5}개" if len(deleted) > 5 else ""
+        print(f"[cleanup] {len(deleted)}개 삭제: {names}{extra}")
+    else:
+        print("[cleanup] 삭제 대상 없음")
 
 
 scheduler = BackgroundScheduler(timezone="Asia/Seoul")
 scheduler.add_job(scheduled_run, CronTrigger(hour=9, minute=0))
+scheduler.add_job(_run_cleanup, CronTrigger(hour=2, minute=0, timezone="Asia/Seoul"))
 scheduler.start()
 
 

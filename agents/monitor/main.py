@@ -13,6 +13,7 @@ from google import genai
 # 프로젝트 루트를 sys.path에 추가해 collector 임포트
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from agents.collector.main import collect_naver_blog
+from utils.alert_sender import send_alert
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
@@ -154,6 +155,16 @@ def run_check_cycle(keywords: list[str], client) -> list[dict]:
         print(f"\n[결과] 새 포스트: {len(alerts)}개 키워드 / 중요 알림: {len(significant)}개")
         for a in significant:
             print(f"  [{a['level'].upper()}] {a['keyword']}: {a['summary']}")
+            subject = f"[{a['level'].upper()}] {a['keyword']} 마케팅 트렌드 알림"
+            body = (
+                f"키워드: {a['keyword']}\n"
+                f"수준: {a['level']}\n"
+                f"요약: {a['summary']}\n"
+                f"새 포스트: {a['new_post_count']}개\n"
+                f"이유: {', '.join(a.get('reasons', []))}\n"
+                f"확인 시각: {a['checked_at']}"
+            )
+            send_alert(subject, body)
         print(f"  로그 저장: {log_path}")
     else:
         print("[결과] 새 포스트 없음")
