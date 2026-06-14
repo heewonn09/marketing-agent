@@ -305,6 +305,30 @@
         .spinner { width: 14px; height: 14px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* ── 히스토리 아이템 에러 배지 ─────────────────────────── */
+        .hi-error-tag {
+            display: inline-block; font-size: 10px; font-weight: 700;
+            color: #c53030; background: #fff5f5; border: 1px solid #fed7d7;
+            border-radius: 4px; padding: 1px 6px; margin-top: 2px;
+        }
+        .hi-icon-btn {
+            width: 28px; height: 28px; border: 1px solid #e2e8f0; border-radius: 6px;
+            background: white; cursor: pointer; font-size: 13px;
+            display: inline-flex; align-items: center; justify-content: center;
+            color: #718096; transition: all 0.15s; flex-shrink: 0;
+        }
+        .hi-icon-btn:hover { background: #667eea; color: white; border-color: #667eea; }
+        /* 빈 결과 화면 파이프라인 안내 */
+        .placeholder-steps {
+            display: flex; gap: 0; align-items: center; flex-wrap: wrap;
+            justify-content: center; margin-top: 16px;
+        }
+        .ps-step {
+            font-size: 11px; color: #cbd5e0; font-weight: 600;
+            background: #f7fafc; border-radius: 6px; padding: 4px 10px;
+        }
+        .ps-arrow { font-size: 11px; color: #e2e8f0; padding: 0 4px; }
+
         /* ── 히스토리 ──────────────────────────────────────────── */
         .history-section { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
         .history-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 12px; border-bottom: 1px solid #edf2f7; }
@@ -332,68 +356,74 @@
         .btn-hist { padding: 4px 11px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 11px; font-weight: 600; background: white; cursor: pointer; font-family: inherit; color: #4a5568; transition: all 0.15s; white-space: nowrap; }
         .btn-hist:hover         { background: #667eea; color: white; border-color: #667eea; }
         .btn-hist.rerun:hover   { background: #38a169; border-color: #38a169; color: white; }
-        .btn-hist.approve { background: #fef3c7; border-color: #f6c90e; color: #78350f; font-weight: 700; }
-        .btn-hist.approve:hover { background: #f59e0b; border-color: #f59e0b; color: white; }
+        .btn-hist.approve { background: #f0fff4; border-color: #68d391; color: #276749; font-weight: 700; }
+        .btn-hist.approve:hover { background: #38a169; border-color: #38a169; color: white; }
 
-        /* ── 통계 바 ───────────────────────────────────────────── */
-        .stats-bar {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-bottom: 16px;
+        /* ── 파이프라인 인디케이터 바 (헤더 내부) ─────────────── */
+        .pipeline-bar {
+            display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+            margin-top: 8px;
         }
-        @media (max-width: 700px) { .stats-bar { grid-template-columns: repeat(2, 1fr); } }
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 14px 18px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
+        .pb-step {
+            font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.65);
+            padding: 3px 8px; border-radius: 5px;
+            transition: all 0.2s; cursor: default;
+            white-space: nowrap;
         }
-        .stat-value {
-            font-size: 22px;
-            font-weight: 700;
-            color: #2d3748;
-            line-height: 1.2;
-        }
-        .stat-label {
-            font-size: 11px;
-            color: #a0aec0;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .stat-badge {
-            display: inline-block;
-            font-size: 10px;
-            padding: 1px 6px;
-            border-radius: 10px;
-            font-weight: 600;
-            margin-top: 2px;
-        }
-        .stat-badge.green { background: #f0fff4; color: #276749; }
-        .stat-badge.blue  { background: #ebf4ff; color: #2b6cb0; }
+        .pb-step.active  { background: rgba(255,255,255,0.25); color: white; }
+        .pb-step.done    { color: rgba(255,255,255,0.9); }
+        .pb-step.error   { background: rgba(229,62,62,0.5); color: #fff; }
+        .pb-arrow { font-size: 10px; color: rgba(255,255,255,0.3); padding: 0 1px; }
 
-        /* ── 애널리틱스 패널 ────────────────────────────────────── */
+        /* ── 통계 + 차트 통합 패널 ─────────────────────────────── */
         .analytics-section {
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            padding: 18px 20px;
-            margin-bottom: 14px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            display: flex; align-items: center; gap: 24px;
         }
-        .analytics-header {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 14px;
+        .analytics-title-col {
+            font-size: 11px; font-weight: 700; color: #a0aec0;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            writing-mode: vertical-rl; transform: rotate(180deg);
+            flex-shrink: 0;
         }
-        .analytics-title { font-size: 11px; font-weight: 700; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.06em; }
-        .analytics-chart-wrap { display: flex; gap: 20px; align-items: center; }
-        .analytics-donut { width: 110px; height: 110px; flex-shrink: 0; }
-        .analytics-legend { display: flex; flex-direction: column; gap: 6px; }
-        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4a5568; }
-        .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .analytics-chart-block {
+            display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+        }
+        .donut-wrap {
+            position: relative; width: 100px; height: 100px; flex-shrink: 0;
+        }
+        .donut-wrap canvas { width: 100px !important; height: 100px !important; }
+        .donut-center {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            pointer-events: none;
+        }
+        .donut-center-val { font-size: 20px; font-weight: 700; color: #2d3748; line-height: 1; }
+        .donut-center-lbl { font-size: 9px; color: #a0aec0; font-weight: 700; text-transform: uppercase; margin-top: 2px; letter-spacing: 0.04em; }
+        .analytics-legend { display: flex; flex-direction: column; gap: 7px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4a5568; }
+        .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .legend-count { font-weight: 700; color: #2d3748; margin-left: auto; padding-left: 12px; }
+
+        .analytics-divider { width: 1px; background: #edf2f7; align-self: stretch; flex-shrink: 0; }
+
+        .stats-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; flex: 1; min-width: 0;
+        }
+        .stat-item { display: flex; flex-direction: column; gap: 2px; }
+        .stat-value { font-size: 20px; font-weight: 700; color: #2d3748; line-height: 1.2; }
+        .stat-label { font-size: 10px; color: #a0aec0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-sub   { font-size: 11px; color: #667eea; font-weight: 600; margin-top: 1px; }
+
+        @media (max-width: 700px) {
+            .analytics-section { flex-wrap: wrap; }
+            .analytics-title-col { writing-mode: horizontal-tb; transform: none; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+        }
 
         /* ── 발행 링크 배지 ─────────────────────────────────────── */
         .btn-pub-link {
@@ -427,41 +457,50 @@
     <header>
         <div>
             <h1>마케팅 자동화 시스템</h1>
-            <p>수집 → 분석 → 작성 → 카드뉴스 → 승인 → 포스팅 → 인스타그램</p>
+            <div class="pipeline-bar" id="pipeline-bar">
+                <span class="pb-step" data-step="step-collect">수집</span><span class="pb-arrow">›</span>
+                <span class="pb-step" data-step="step-analyze">분석</span><span class="pb-arrow">›</span>
+                <span class="pb-step" data-step="step-write">작성</span><span class="pb-arrow">›</span>
+                <span class="pb-step" data-step="step-cardnews">카드뉴스</span><span class="pb-arrow">›</span>
+                <span class="pb-step" data-step="step-report">리포트</span><span class="pb-arrow">›</span>
+                <span class="pb-step" data-step="step-post">포스팅</span><span class="pb-arrow">›</span>
+                <span class="pb-step" data-step="step-instagram">인스타그램</span>
+            </div>
         </div>
         <a href="/logout" class="btn-logout">로그아웃</a>
     </header>
 
-    <!-- 통계 바 -->
-    <div class="stats-bar" id="stats-bar">
-        <div class="stat-card">
-            <div class="stat-value" id="stat-total">—</div>
-            <div class="stat-label">전체 실행</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-rate">—</div>
-            <div class="stat-label">성공률</div>
-            <span class="stat-badge green" id="stat-done-count" style="display:none"></span>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-week">—</div>
-            <div class="stat-label">이번 주 실행</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value" id="stat-topkw" style="font-size:14px;word-break:break-all">—</div>
-            <div class="stat-label">최다 키워드</div>
-            <span class="stat-badge blue" id="stat-avg-dur" style="display:none"></span>
-        </div>
-    </div>
-
-    <!-- 애널리틱스 -->
+    <!-- 통계 + 차트 통합 패널 -->
     <div class="analytics-section" id="analytics-section" style="display:none">
-        <div class="analytics-header">
-            <span class="analytics-title">실행 현황 분석</span>
-        </div>
-        <div class="analytics-chart-wrap">
-            <canvas class="analytics-donut" id="status-chart"></canvas>
+        <span class="analytics-title-col">실행 현황</span>
+        <div class="analytics-chart-block">
+            <div class="donut-wrap">
+                <canvas id="status-chart"></canvas>
+                <div class="donut-center">
+                    <div class="donut-center-val" id="donut-success-val">—</div>
+                    <div class="donut-center-lbl">성공률</div>
+                </div>
+            </div>
             <div class="analytics-legend" id="chart-legend"></div>
+        </div>
+        <div class="analytics-divider"></div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value" id="stat-total">—</div>
+                <div class="stat-label">전체 실행</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-week">—</div>
+                <div class="stat-label">이번 주</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-topkw" style="font-size:14px;word-break:break-all">—</div>
+                <div class="stat-label">최다 키워드</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-avg-dur">—</div>
+                <div class="stat-label">평균 소요</div>
+            </div>
         </div>
     </div>
 
@@ -497,6 +536,15 @@
                 <div class="placeholder" id="placeholder">
                     <div class="placeholder-icon">📊</div>
                     <p>파이프라인을 실행하면<br>콘텐츠 결과가 여기에 표시됩니다.</p>
+                    <div class="placeholder-steps">
+                        <span class="ps-step">수집</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">분석</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">작성</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">카드뉴스</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">승인</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">포스팅</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">인스타그램</span>
+                    </div>
                 </div>
 
                 <!-- 승인 배너 -->
@@ -680,6 +728,7 @@
         document.getElementById('progress-card').style.display = 'block';
         document.getElementById('btn-run').disabled = true;
         resetResultPanel();
+        if (typeof resetPipelineBar === 'function') resetPipelineBar();
         initSteps(currentKeywords);
 
         if (jobIdOverride) {
@@ -1070,12 +1119,11 @@
         const LABELS = { done:'완료', running:'실행 중', error:'오류', interrupted:'중단',
                          pending_approval:'승인 대기', posting:'게시 중', rejected:'거절됨' };
         const statusLabel = LABELS[job.status] || job.status;
-        const kws       = (job.keywords||[]).join(', ') || '(키워드 없음)';
+        const kws       = (job.keywords||[]).join(', ') || '(지정되지 않음)';
         const dateStr   = job.date || '';
         const createdAt = job.created_at ? job.created_at.slice(0,16).replace('T',' ') : '';
         const dotCls    = job.status.replace(/_/g,'');
 
-        // 실행 시간 표시
         let durStr = '';
         if (job.duration_seconds) {
             const m = Math.floor(job.duration_seconds / 60);
@@ -1083,15 +1131,19 @@
             durStr = ` · ${m}분 ${s}초`;
         }
 
+        let errorTag = '';
+        if (job.status === 'error' && job.error_message) {
+            errorTag = `<div class="hi-error-tag">${esc(job.error_message.slice(0,60))}</div>`;
+        }
+
         let actionsHtml = '';
         if (job.status === 'done' && dateStr)
             actionsHtml += `<button class="btn-hist" onclick="showResult('${dateStr}',${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
         if (job.status === 'pending_approval')
-            actionsHtml += `<button class="btn-hist approve" onclick="showApproval('${job.job_id}',${JSON.stringify(job.keywords||[])},'${dateStr}')">⏸ 승인하기</button>`;
+            actionsHtml += `<button class="btn-hist approve" onclick="showApproval('${job.job_id}',${JSON.stringify(job.keywords||[])},'${dateStr}')">✓ 승인하기</button>`;
         if (job.keywords?.length && !['running','posting'].includes(job.status))
-            actionsHtml += `<button class="btn-hist rerun" onclick="rerunJob('${job.job_id}')">재실행</button>`;
+            actionsHtml += `<button class="hi-icon-btn rerun" title="재실행" onclick="rerunJob('${job.job_id}')">↺</button>`;
 
-        // 발행 결과 링크
         if (job.naver_post_url)
             actionsHtml += `<a class="btn-pub-link" href="${esc(job.naver_post_url)}" target="_blank" rel="noopener">📝 블로그</a>`;
         if (job.instagram_permalink)
@@ -1102,6 +1154,7 @@
             <div class="hi-info">
                 <div class="hi-kw">${esc(kws)}</div>
                 <div class="hi-meta">${statusLabel}${dateStr?' · '+dateStr:''} · ${createdAt}${durStr}</div>
+                ${errorTag}
             </div>
             <div class="hi-actions">${actionsHtml}</div>`;
         return item;
@@ -1170,37 +1223,33 @@
 
     function loadStats() {
         fetch('/stats').then(r => r.json()).then(s => {
-            document.getElementById('stat-total').textContent = s.total ?? '—';
-            document.getElementById('stat-rate').textContent  = s.total ? s.success_rate + '%' : '—';
-            document.getElementById('stat-week').textContent  = s.week_jobs ?? '—';
-            document.getElementById('stat-topkw').textContent = s.top_keyword || '—';
+            document.getElementById('stat-total').textContent  = s.total ?? '—';
+            document.getElementById('stat-week').textContent   = s.week_jobs ?? '—';
+            document.getElementById('stat-topkw').textContent  = s.top_keyword || '—';
 
-            if (s.done > 0) {
-                const dc = document.getElementById('stat-done-count');
-                dc.textContent = `✓ ${s.done}건 성공`;
-                dc.style.display = 'inline-block';
-            }
             if (s.avg_duration_seconds) {
-                const ad = document.getElementById('stat-avg-dur');
                 const m = Math.floor(s.avg_duration_seconds / 60);
                 const sec = s.avg_duration_seconds % 60;
-                ad.textContent = `평균 ${m}분 ${sec}초`;
-                ad.style.display = 'inline-block';
+                document.getElementById('stat-avg-dur').textContent = `${m}분 ${sec}초`;
             }
 
-            // 도넛 차트
             if (s.total > 0) {
-                document.getElementById('analytics-section').style.display = 'block';
-                const pending = s.total - s.done - s.error;
-                const data = [s.done, s.error, pending < 0 ? 0 : pending];
-                const labels = ['완료', '오류', '기타'];
-                const colors = ['#38a169', '#e53e3e', '#a0aec0'];
+                document.getElementById('analytics-section').style.display = 'flex';
 
+                // 도넛 중앙 성공률
+                document.getElementById('donut-success-val').textContent = (s.success_rate ?? 0) + '%';
+
+                const pending = Math.max(0, s.total - s.done - (s.error || 0));
+                const data    = [s.done, s.error || 0, pending];
+                const labels  = ['완료', '오류', '기타'];
+                const colors  = ['#38a169', '#e53e3e', '#a0aec0'];
+
+                // 인라인 범례 (도넛 오른쪽)
                 const legend = document.getElementById('chart-legend');
                 legend.innerHTML = '';
                 labels.forEach((l, i) => {
                     if (!data[i]) return;
-                    legend.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${colors[i]}"></div>${l}: <strong>${data[i]}</strong></div>`;
+                    legend.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${colors[i]}"></div>${l}<span class="legend-count">${data[i]}</span></div>`;
                 });
 
                 const ctx = document.getElementById('status-chart').getContext('2d');
@@ -1211,14 +1260,66 @@
                     options: {
                         responsive: false,
                         plugins: { legend: { display: false }, tooltip: { callbacks: {
-                            label: ctx => ` ${ctx.label}: ${ctx.parsed}`
+                            label: c => ` ${c.label}: ${c.parsed}`
                         }}},
-                        cutout: '68%',
+                        cutout: '70%',
                     }
                 });
             }
         }).catch(() => {});
     }
+
+    // ── 헤더 파이프라인 바 동기화 ───────────────────────────────
+    const PB_STEP_IDS = ['step-collect','step-analyze','step-write','step-cardnews','step-report','step-post','step-instagram'];
+
+    function resetPipelineBar() {
+        document.querySelectorAll('#pipeline-bar .pb-step').forEach(el => {
+            el.classList.remove('active','done','error');
+        });
+    }
+
+    function setPipelineBarStep(stepId, state) {
+        const el = document.querySelector(`#pipeline-bar [data-step="${stepId}"]`);
+        if (!el) return;
+        el.classList.remove('active','done','error');
+        if (state) el.classList.add(state);
+    }
+
+    function syncPipelineBarFromStep(stepName, state) {
+        for (const [key, id] of Object.entries(STEP_MAP)) {
+            if (stepName.includes(key)) {
+                setPipelineBarStep(id, state);
+                return;
+            }
+        }
+    }
+
+    // SSE STEP 이벤트 수신 시 파이프라인 바 갱신 (listenStream 내 STEP 핸들러 확장)
+    const _origListenStream = listenStream;
+    listenStream = function(jobId) {
+        resetPipelineBar();
+        _origListenStream(jobId);
+    };
+
+    // STEP 이벤트 핸들러에서 파이프라인 바도 업데이트하도록 기존 onmessage 래핑
+    const _origESPatch = function() {
+        // onmessage를 이미 listenStream 안에서 정의하므로
+        // STEP_MAP을 활용한 pb sync는 setStepByName에 인라인 추가
+    };
+
+    // setStepByName을 확장해 파이프라인 바도 함께 업데이트
+    const _origSetStepByName = setStepByName;
+    setStepByName = function(name, state) {
+        _origSetStepByName(name, state);
+        // 이전 active 단계를 done으로
+        if (state === 'active') {
+            document.querySelectorAll('#pipeline-bar .pb-step.active').forEach(el => {
+                el.classList.remove('active');
+                el.classList.add('done');
+            });
+        }
+        syncPipelineBarFromStep(name, state === 'active' ? 'active' : state === 'error' ? 'error' : 'done');
+    };
 
     loadHistory();
     loadStats();
