@@ -295,6 +295,23 @@ def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False) -> N
         ).start()
 
 
+# 종료(terminal) 상태 — 일정 시간 후 메모리에서 정리 대상
+_TERMINAL_STATUSES = {"done", "error", "rejected", "interrupted"}
+
+
+def _prune_jobs(max_age: int = 3600) -> None:
+    """메모리 누수 방지: 종료된 잡을 max_age(기본 1시간) 경과 후 in-memory dict에서 제거.
+    상태는 jobs.db에 남아 /history·재연결 복원에는 영향 없음. 진행 중 잡은 유지."""
+    now = time.time()
+    stale = [
+        jid for jid, info in list(jobs.items())
+        if info.get("status") in _TERMINAL_STATUSES
+        and now - info.get("started_at", now) > max_age
+    ]
+    for jid in stale:
+        jobs.pop(jid, None)
+
+
 # ── 라우트 ─────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -318,6 +335,7 @@ def run():
     if not keywords:
         return jsonify({"error": "키워드를 입력하세요"}), 400
 
+    _prune_jobs()  # 종료된 옛 잡 정리 (메모리 누수 방지)
     job_id = uuid.uuid4().hex[:8]
     jobs[job_id] = {
         "status": "running", "queue": queue.Queue(), "date": None,
