@@ -22,7 +22,7 @@ load_dotenv(Path(__file__).parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.job_store import init_db, upsert_job, get_job, list_jobs, get_stats
 from utils.cleanup import cleanup_old_files
-from utils.notifier import notify_done, notify_error
+from utils.notifier import notify_done, notify_error, notify_approval_pending
 from utils.auth_guard import verify_credentials, LoginRateLimiter
 
 ROOT = Path(__file__).parent
@@ -286,6 +286,13 @@ def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False) -> N
         jobs[job_id]["date"] = today
         upsert_job(job_id, "pending_approval", keywords, today)
         jobs[job_id]["queue"].put(f"PENDING:{today}")
+        # 승인 대기 알림 (이메일 + 슬랙)
+        base_url = os.environ.get("CARDNEWS_BASE_URL", "")
+        threading.Thread(
+            target=notify_approval_pending,
+            args=(keywords, today, base_url),
+            daemon=True,
+        ).start()
 
 
 # ── 라우트 ─────────────────────────────────────────────────────────────────
