@@ -138,6 +138,13 @@ ADMIN_PASSWORD_HASH=          # (권장) werkzeug 해시. 설정 시 ADMIN_PASSW
 FORCE_HTTPS=1                 # HTTPS(리버스 프록시) 운영 시 세션 쿠키 Secure
 COOKIE_ENCRYPTION_KEY=        # 미설정 시 data/.enc_key 자동 생성
 POSTER_PROXY=                 # poster 봇 감지 우회용 프록시 (권장: residential)
+
+# ── 튜닝 (선택, 미설정 시 기본값) ──
+COLLECT_TARGET_COUNT=30       # collector 키워드당 수집 포스트 수
+DATALAB_KEYWORD_LIMIT=5       # analyzer 데이터랩 1회 조회 키워드 수
+MONITOR_SEEN_LIMIT=500        # monitor 키워드별 보관 링크 수
+MONITOR_INTERVAL_MIN=360      # monitor 기본 체크 주기(분)
+IG_POLL_ATTEMPTS=12           # instagram 미디어 처리 폴링 횟수(×5초)
 ```
 
 | 키 | 발급처 |

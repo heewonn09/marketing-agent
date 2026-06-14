@@ -14,6 +14,7 @@ import sys as _sys
 _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from utils.gemini_retry import gemini_retry
 from utils.logging_setup import get_logger
+from utils.config import env_int
 
 log = get_logger(
     "instagram",
@@ -40,6 +41,8 @@ DEFAULT_IMAGE_URL = os.environ.get(
     "https://picsum.photos/1080/1080",
 )
 LAST_RESORT_URL = "https://picsum.photos/1080/1080"
+# 미디어 컨테이너 처리 완료 폴링 횟수 (×5초)
+POLL_ATTEMPTS = env_int("IG_POLL_ATTEMPTS", 12)
 
 
 def _safe_keyword(keyword: str) -> str:
@@ -287,7 +290,7 @@ def post_instagram(keyword: str, post_date: str) -> None:
         # Step 2: 컨테이너 처리 완료 대기 (FINISHED 상태까지 폴링)
         import time
         _print("[2/3] 컨테이너 처리 대기 중...")
-        for attempt in range(12):
+        for attempt in range(POLL_ATTEMPTS):
             time.sleep(5)
             status_res = requests.get(
                 f"{API_BASE}/{creation_id}",
@@ -442,7 +445,7 @@ def post_carousel(keyword: str, post_date: str) -> None:
 
     # Step 3: FINISHED 상태 대기
     _print("[carousel] 처리 대기 중...")
-    for attempt in range(12):
+    for attempt in range(POLL_ATTEMPTS):
         time.sleep(5)
         status_res = requests.get(
             f"{API_BASE}/{carousel_id}",

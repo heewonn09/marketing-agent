@@ -13,7 +13,11 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-_TARGET_COUNT = 30
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from utils.config import env_int
+
+_TARGET_COUNT = env_int("COLLECT_TARGET_COUNT", 30)
 _DISPLAY_PER_REQUEST = 10  # Naver API 최대 100, 안정적으로 10씩
 
 

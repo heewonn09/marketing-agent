@@ -14,6 +14,7 @@ from google import genai
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from agents.collector.main import collect_naver_blog
 from utils.alert_sender import send_alert
+from utils.config import env_int
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
@@ -21,6 +22,10 @@ BASE_DIR = Path(__file__).parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 STATE_FILE = DATA_DIR / "monitor_state.json"
 MONITOR_DIR = Path(__file__).parent
+
+# 키워드별 보관할 최근 본 링크 수 / 기본 체크 주기(분)
+SEEN_LIMIT = env_int("MONITOR_SEEN_LIMIT", 500)
+DEFAULT_INTERVAL_MIN = env_int("MONITOR_INTERVAL_MIN", 360)
 
 
 def load_state() -> dict:
@@ -90,7 +95,7 @@ def check_keyword(keyword: str, state: dict, client) -> dict | None:
 
     # 최근 500개 링크만 유지
     updated_links = list(seen | {p["link"] for p in posts})
-    state["seen_links"][keyword] = updated_links[-500:]
+    state["seen_links"][keyword] = updated_links[-SEEN_LIMIT:]
     state["last_checked"][keyword] = datetime.now().isoformat()
 
     # 첫 실행은 기준선 초기화만 수행 (알림 없음)
@@ -179,8 +184,8 @@ def main():
         help="모니터링할 키워드 (미지정 시 keywords.json 사용)",
     )
     parser.add_argument(
-        "--interval", type=int, default=360,
-        help="체크 주기(분, 기본값: 360=6시간)",
+        "--interval", type=int, default=DEFAULT_INTERVAL_MIN,
+        help=f"체크 주기(분, 기본값: {DEFAULT_INTERVAL_MIN}). MONITOR_INTERVAL_MIN 환경변수로도 설정",
     )
     parser.add_argument(
         "--once", action="store_true",

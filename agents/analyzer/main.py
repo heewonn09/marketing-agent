@@ -20,6 +20,10 @@ import sys as _sys
 _sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from utils.gemini_retry import gemini_retry
 from utils.logging_setup import get_logger
+from utils.config import env_int
+
+# 네이버 데이터랩 한 번에 조회할 최대 키워드 수 (API 그룹 제한)
+DATALAB_KEYWORD_LIMIT = env_int("DATALAB_KEYWORD_LIMIT", 5)
 
 log = get_logger(
     "analyzer",
@@ -131,7 +135,9 @@ def fetch_search_trends(
     start_date = (last_sunday - timedelta(weeks=4)).strftime("%Y-%m-%d")
     end_date = last_sunday.strftime("%Y-%m-%d")
 
-    keyword_groups = [{"groupName": kw, "keywords": [kw]} for kw in keywords[:5]]
+    keyword_groups = [
+        {"groupName": kw, "keywords": [kw]} for kw in keywords[:DATALAB_KEYWORD_LIMIT]
+    ]
     payload = json.dumps({
         "startDate": start_date,
         "endDate": end_date,
