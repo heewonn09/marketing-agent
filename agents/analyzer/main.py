@@ -16,6 +16,10 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from utils.gemini_retry import gemini_retry
+
 _STOP_WORDS = {
     "이", "그", "저", "의", "을", "를", "가", "은", "는", "에", "와", "과",
     "도", "로", "으로", "에서", "부터", "까지", "하다", "있다", "되다", "없다",
@@ -264,6 +268,7 @@ def format_posts_for_prompt(posts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+@gemini_retry
 def analyze_with_gemini(keyword: str, posts: list[dict], client) -> dict:
     posts_text = format_posts_for_prompt(posts)
     user_message = ANALYSIS_PROMPT.format(

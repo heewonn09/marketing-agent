@@ -13,6 +13,10 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(ROOT / ".env")
 
+import sys as _sys
+_sys.path.insert(0, str(ROOT))
+from utils.gemini_retry import gemini_retry
+
 # ── 색상 ─────────────────────────────────────────────────────────────────────
 C_GRAD_TOP    = (102, 126, 234)   # #667eea
 C_GRAD_BTM    = (118,  75, 162)   # #764ba2
@@ -30,6 +34,7 @@ SIZE   = 1080
 MARGIN = 72
 
 
+@gemini_retry
 def _gemini_one_liner(text: str) -> str:
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key or not text.strip():

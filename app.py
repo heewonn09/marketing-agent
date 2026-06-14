@@ -11,7 +11,7 @@ from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, render_template, request, send_file
+from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, session, url_for
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -20,13 +20,17 @@ from utils.job_store import init_db, upsert_job
 from utils.cleanup import cleanup_old_files
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(32).hex()
 
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-_AUTH_EXEMPT = ("/stream/",)  # SSE는 job_id가 추측 불가 토큰 역할
+
+# SSE 스트림과 카드뉴스 이미지는 인증 면제 (job_id/파일명이 추측 불가 토큰 역할)
+_AUTH_EXEMPT_PREFIXES = ("/stream/", "/cardnews/")
+_AUTH_EXEMPT_PATHS = ("/login",)
 
 # job_id -> {status, queue, date}
 jobs: dict[str, dict] = {}
@@ -34,25 +38,58 @@ jobs: dict[str, dict] = {}
 init_db(ROOT / "data" / "jobs.db")
 
 
+def _check_credentials(user: str, pwd: str) -> bool:
+    return bool(ADMIN_USER) and user == ADMIN_USER and pwd == ADMIN_PASSWORD
+
+
 @app.before_request
 def _require_auth():
     if not ADMIN_USER or not ADMIN_PASSWORD:
         return  # 미설정 시 인증 생략 (로컬 개발)
-    if any(request.path.startswith(p) for p in _AUTH_EXEMPT):
+    if request.path in _AUTH_EXEMPT_PATHS:
         return
+    if any(request.path.startswith(p) for p in _AUTH_EXEMPT_PREFIXES):
+        return
+
+    # 1) 세션 쿠키 확인 (로그인 폼 방식)
+    if session.get("authenticated"):
+        return
+
+    # 2) Basic Auth (curl / API 클라이언트 호환)
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Basic "):
         try:
             user, pwd = base64.b64decode(auth[6:]).decode().split(":", 1)
-            if user == ADMIN_USER and pwd == ADMIN_PASSWORD:
+            if _check_credentials(user, pwd):
                 return
         except Exception:
             pass
-    return Response(
-        "인증이 필요합니다",
-        401,
-        {"WWW-Authenticate": 'Basic realm="Marketing Agent"'},
-    )
+
+    # 3) 브라우저 → 로그인 페이지로 리다이렉트 / API 클라이언트 → 401
+    if "text/html" in request.headers.get("Accept", ""):
+        return redirect(url_for("login", next=request.path))
+    return Response("인증이 필요합니다", 401,
+                    {"WWW-Authenticate": 'Basic realm="Marketing Agent"'})
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        user = request.form.get("username", "")
+        pwd = request.form.get("password", "")
+        if _check_credentials(user, pwd):
+            session["authenticated"] = True
+            next_url = request.args.get("next") or url_for("index")
+            return redirect(next_url)
+        error = "아이디 또는 비밀번호가 올바르지 않습니다."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool = True) -> bool:

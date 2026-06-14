@@ -10,6 +10,10 @@ from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from utils.gemini_retry import gemini_retry
+
 # Windows cp949 콘솔에서 이모지 등 비cp949 문자 출력 오류 방지
 if sys.stdout and hasattr(sys.stdout, 'buffer'):
     _out = open(sys.stdout.fileno(), mode='wb', closefd=False)
@@ -36,6 +40,64 @@ def _safe_keyword(keyword: str) -> str:
     return re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
 
 
+def _refresh_token(access_token: str) -> str:
+    """Instagram 장기 액세스 토큰 갱신 후 .env 저장. 실패 시 기존 토큰 반환."""
+    try:
+        res = requests.get(
+            "https://graph.instagram.com/refresh_access_token",
+            params={"grant_type": "ig_refresh_token", "access_token": access_token},
+            timeout=15,
+        )
+        if not res.ok:
+            _print(f"[token] 갱신 실패 {res.status_code}: {res.text[:80]}")
+            return access_token
+        data = res.json()
+        new_token = data.get("access_token", access_token)
+        days = data.get("expires_in", 0) // 86400
+        _print(f"[token] 갱신 완료 — 만료까지 {days}일")
+        if new_token != access_token:
+            _save_env_token(new_token)
+        return new_token
+    except Exception as e:
+        _print(f"[token] 갱신 예외: {e}")
+        return access_token
+
+
+def _save_env_token(new_token: str) -> None:
+    env_path = ROOT / ".env"
+    try:
+        text = env_path.read_text(encoding="utf-8")
+        text = re.sub(
+            r"^INSTAGRAM_ACCESS_TOKEN=.*$",
+            f"INSTAGRAM_ACCESS_TOKEN={new_token}",
+            text,
+            flags=re.MULTILINE,
+        )
+        env_path.write_text(text, encoding="utf-8")
+        _print("[token] .env 토큰 업데이트 완료")
+    except Exception as e:
+        _print(f"[token] .env 저장 실패: {e}")
+
+
+def ensure_fresh_token(access_token: str) -> str:
+    """토큰 유효성 확인 후 자동 갱신. 매 실행마다 60일 갱신하여 만료 방지."""
+    try:
+        res = requests.get(
+            f"{API_BASE}/me",
+            params={"fields": "id,username", "access_token": access_token},
+            timeout=10,
+        )
+        if not res.ok:
+            _print(f"[token] 검증 실패 {res.status_code} — 갱신 시도")
+            return _refresh_token(access_token)
+        username = res.json().get("username", res.json().get("id", "?"))
+        _print(f"[token] 유효 (계정: {username}) — 갱신 중...")
+    except Exception as e:
+        _print(f"[token] 검증 예외: {e}")
+        return access_token
+    return _refresh_token(access_token)
+
+
 def load_content(keyword: str, post_date: str) -> dict:
     path = ROOT / "output" / f"content_{_safe_keyword(keyword)}_{post_date}.json"
     if not path.exists():
@@ -56,6 +118,7 @@ def save_error_log(keyword: str, error: str) -> None:
     _print(f"[ERROR LOG] {log_path}")
 
 
+@gemini_retry
 def _translate_keyword(keyword: str) -> str:
     """Gemini로 키워드를 Unsplash 검색용 영어 쿼리로 변환."""
     try:
@@ -173,6 +236,7 @@ def post_instagram(keyword: str, post_date: str) -> None:
         _print("[ERROR] INSTAGRAM_ACCOUNT_ID 환경변수가 설정되지 않았습니다.")
         sys.exit(1)
 
+    access_token = ensure_fresh_token(access_token)
     _print(f"[instagram] 키워드: {keyword} / 날짜: {post_date}")
 
     content = load_content(keyword, post_date)
@@ -280,6 +344,8 @@ def post_carousel(keyword: str, post_date: str) -> None:
     if not account_id:
         _print("[ERROR] INSTAGRAM_ACCOUNT_ID 환경변수가 설정되지 않았습니다.")
         sys.exit(1)
+
+    access_token = ensure_fresh_token(access_token)
 
     safe_kw = _safe_keyword(keyword)
     image_urls = [

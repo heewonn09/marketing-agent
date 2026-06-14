@@ -9,6 +9,10 @@ import google.genai as genai
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 from google.genai import types
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from utils.gemini_retry import gemini_retry
+
 
 def _sentiment_summary(posts_sentiment: list) -> str:
     counts = {"긍정": 0, "중립": 0, "부정": 0}
@@ -162,6 +166,18 @@ def build_prompt(data: dict) -> str:
 """
 
 
+@gemini_retry
+def _call_gemini(client, prompt: str) -> str:
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+    )
+    return response.text.strip()
+
+
 def generate_content(analyzed_data: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -173,15 +189,8 @@ def generate_content(analyzed_data: dict) -> dict:
     client = genai.Client(api_key=api_key)
     prompt = build_prompt(analyzed_data)
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-        ),
-    )
+    text = _call_gemini(client, prompt)
 
-    text = response.text.strip()
     # 마크다운 코드블록 제거
     text = re.sub(r'^```(?:json)?\s*\n?', '', text)
     text = re.sub(r'\n?```\s*$', '', text)
