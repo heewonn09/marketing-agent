@@ -241,9 +241,15 @@ def stream(job_id: str):
         else:
             return "Job not found", 404
 
-    q = jobs[job_id]["queue"]
+    job_info = jobs[job_id]
+    q = job_info["queue"]
 
     def generate():
+        # 재연결 시: 이미 pending_approval 상태면 즉시 PENDING 이벤트 재전송
+        if job_info.get("status") == "pending_approval":
+            today = job_info.get("date") or date.today().isoformat()
+            yield f"data: PENDING:{today}\n\n"
+
         while True:
             try:
                 msg = q.get(timeout=60)
