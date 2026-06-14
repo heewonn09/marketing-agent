@@ -358,23 +358,49 @@ def post_carousel(keyword: str, post_date: str) -> None:
     for url in image_urls:
         _print(f"  {url}")
 
-    # Step 1: 각 이미지 item container 생성
-    item_ids: list[str] = []
+    # Step 0: 모든 이미지 URL이 실제 접근 가능한지 사전 확인
+    #         (Meta 크롤러가 페치하기 전에 우리가 먼저 확인 — 서버 재시작/일시 장애 조기 감지)
+    _print("\n[0/4] 이미지 URL 접근성 사전 확인...")
     for idx, url in enumerate(image_urls, start=1):
-        _print(f"\n[1/4-{idx}] item container 생성 중...")
-        res = requests.post(
-            f"{API_BASE}/{account_id}/media",
-            data={"image_url": url, "is_carousel_item": "true",
-                  "access_token": access_token},
-            timeout=30,
-        )
-        if not res.ok:
-            err = res.json().get("error", {})
-            msg = f"item {idx} 생성 실패 {res.status_code}: {err.get('message', res.text)}"
+        ok = False
+        for retry in range(3):
+            if _check_url_accessible(url):
+                ok = True
+                break
+            _print(f"      이미지 {idx} 접근 불가 — 재시도 {retry + 1}/3")
+            time.sleep(3)
+        if not ok:
+            msg = f"이미지 {idx} URL 접근 불가 (서버 미응답): {url[:80]}"
             _print(f"[ERROR] {msg}")
             save_error_log(keyword, msg)
             sys.exit(1)
-        item_id = res.json().get("id")
+    _print("      모든 이미지 접근 가능 확인됨")
+
+    # Step 1: 각 이미지 item container 생성 (Meta 페치 실패 시 재시도)
+    item_ids: list[str] = []
+    for idx, url in enumerate(image_urls, start=1):
+        _print(f"\n[1/4-{idx}] item container 생성 중...")
+        item_id = None
+        last_msg = ""
+        for retry in range(3):
+            res = requests.post(
+                f"{API_BASE}/{account_id}/media",
+                data={"image_url": url, "is_carousel_item": "true",
+                      "access_token": access_token},
+                timeout=30,
+            )
+            if res.ok:
+                item_id = res.json().get("id")
+                break
+            err = res.json().get("error", {})
+            last_msg = f"item {idx} 생성 실패 {res.status_code}: {err.get('message', res.text)}"
+            # "Only photo or video..." = Meta가 이미지 페치 실패 → 잠시 후 재시도
+            _print(f"      {last_msg} — 재시도 {retry + 1}/3")
+            time.sleep(5)
+        if item_id is None:
+            _print(f"[ERROR] {last_msg}")
+            save_error_log(keyword, last_msg)
+            sys.exit(1)
         item_ids.append(item_id)
         _print(f"      item_id: {item_id}")
 
