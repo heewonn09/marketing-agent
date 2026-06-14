@@ -1,0 +1,27 @@
+# Caddy 리버스 프록시 — 마케팅 에이전트 HTTPS 종단
+#
+# 설치 (Debian 12 / GCP):
+#   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+#   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+#   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+#   sudo apt update && sudo apt install caddy
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+#
+# Flask 측: .env 에 FORCE_HTTPS=1 설정 (세션 쿠키 Secure 플래그 활성화).
+# gunicorn 은 계속 127.0.0.1:5000 에서만 listen 하도록 두고, 외부 노출은 Caddy(443)만.
+
+# ── 옵션 A: 도메인이 있는 경우 (권장) — 자동 Let's Encrypt TLS ──
+# example.com {
+#     reverse_proxy 127.0.0.1:5000
+#     encode gzip
+# }
+
+# ── 옵션 B: 도메인 없이 IP 만 있는 경우 — Caddy 내부 자체서명 인증서 ──
+# (브라우저 경고는 뜨지만 전송 구간은 암호화됨. Let's Encrypt 는 도메인 필요)
+https://34.11.175.125 {
+    tls internal
+    reverse_proxy 127.0.0.1:5000 {
+        header_up X-Forwarded-Proto https
+    }
+    encode gzip
+}

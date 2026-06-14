@@ -1,0 +1,120 @@
+import importlib
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
+
+from utils import auth_guard
+from werkzeug.security import generate_password_hash
+
+
+# ── secrets (at-rest 암호화) ──────────────────────────────────────────────
+@pytest.fixture
+def secrets_mod(tmp_path, monkeypatch):
+    """KEY_FILE 을 tmp 로 격리하고 env 키 제거한 secrets 모듈 반환."""
+    monkeypatch.delenv("COOKIE_ENCRYPTION_KEY", raising=False)
+    from utils import secrets as secrets_module
+    importlib.reload(secrets_module)
+    monkeypatch.setattr(secrets_module, "_KEY_FILE", tmp_path / ".enc_key")
+    return secrets_module
+
+
+def test_encrypt_decrypt_round_trip(secrets_mod, tmp_path):
+    target = tmp_path / "cookies.json"
+    payload = [{"name": "NID_SES", "value": "secret", "한글": "값"}]
+    secrets_mod.save_encrypted_json(target, payload)
+
+    # 파일은 평문 JSON 이 아니어야 한다
+    raw = target.read_bytes()
+    assert not raw.lstrip().startswith(b"[")
+
+    obj, was_encrypted = secrets_mod.load_encrypted_json(target)
+    assert was_encrypted is True
+    assert obj == payload
+
+
+def test_load_legacy_plaintext_json(secrets_mod, tmp_path):
+    target = tmp_path / "legacy.json"
+    payload = [{"name": "NID_AUT", "value": "old"}]
+    target.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    obj, was_encrypted = secrets_mod.load_encrypted_json(target)
+    assert was_encrypted is False
+    assert obj == payload
+
+
+def test_env_key_used_when_set(tmp_path, monkeypatch):
+    from cryptography.fernet import Fernet
+    key = Fernet.generate_key().decode()
+    monkeypatch.setenv("COOKIE_ENCRYPTION_KEY", key)
+    from utils import secrets as secrets_module
+    importlib.reload(secrets_module)
+    # 키 파일을 만들지 않고도 동작해야 한다
+    monkeypatch.setattr(secrets_module, "_KEY_FILE", tmp_path / "nonexistent" / ".enc_key")
+    target = tmp_path / "c.json"
+    secrets_module.save_encrypted_json(target, {"a": 1})
+    assert not (tmp_path / "nonexistent" / ".enc_key").exists()
+    assert secrets_module.load_encrypted_json(target)[0] == {"a": 1}
+
+
+# ── verify_credentials ────────────────────────────────────────────────────
+def test_verify_credentials_plaintext_ok():
+    assert auth_guard.verify_credentials("admin", "pw", "admin", "pw") is True
+
+
+def test_verify_credentials_wrong_password():
+    assert auth_guard.verify_credentials("admin", "nope", "admin", "pw") is False
+
+
+def test_verify_credentials_no_admin_configured():
+    assert auth_guard.verify_credentials("admin", "pw", "", "pw") is False
+
+
+def test_verify_credentials_hash():
+    h = generate_password_hash("s3cret")
+    assert auth_guard.verify_credentials("admin", "s3cret", "admin", admin_password_hash=h) is True
+    assert auth_guard.verify_credentials("admin", "wrong", "admin", admin_password_hash=h) is False
+
+
+def test_verify_credentials_hash_takes_precedence_over_plaintext():
+    h = generate_password_hash("hashed")
+    # 평문은 틀려도 해시가 맞으면 통과
+    assert auth_guard.verify_credentials("admin", "hashed", "admin", "plain", h) is True
+
+
+# ── LoginRateLimiter ──────────────────────────────────────────────────────
+def test_rate_limiter_locks_after_max_attempts():
+    rl = auth_guard.LoginRateLimiter(max_attempts=3, window=300, lockout=900)
+    assert rl.is_locked("1.2.3.4", now=0) is False
+    for i in range(3):
+        rl.register_failure("1.2.3.4", now=i)
+    assert rl.is_locked("1.2.3.4", now=3) is True
+
+
+def test_rate_limiter_unlocks_after_lockout():
+    rl = auth_guard.LoginRateLimiter(max_attempts=2, window=300, lockout=900)
+    rl.register_failure("ip", now=0)
+    rl.register_failure("ip", now=1)
+    assert rl.is_locked("ip", now=100) is True
+    assert rl.is_locked("ip", now=1000) is False
+
+
+def test_rate_limiter_window_expiry():
+    rl = auth_guard.LoginRateLimiter(max_attempts=3, window=300, lockout=900)
+    rl.register_failure("ip", now=0)
+    rl.register_failure("ip", now=1)
+    # 윈도우(300s) 밖이면 이전 시도는 무시 → 잠기지 않음
+    rl.register_failure("ip", now=400)
+    assert rl.is_locked("ip", now=401) is False
+
+
+def test_rate_limiter_success_resets():
+    rl = auth_guard.LoginRateLimiter(max_attempts=2, window=300, lockout=900)
+    rl.register_failure("ip", now=0)
+    rl.register_success("ip")
+    rl.register_failure("ip", now=1)
+    assert rl.is_locked("ip", now=2) is False

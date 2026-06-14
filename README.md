@@ -131,6 +131,13 @@ INSTAGRAM_DEFAULT_IMAGE_URL=https://images.unsplash.com/photo-1611532736597-de2d
 
 # 스케줄러 자동 실행 키워드
 SCHEDULED_KEYWORDS=AI 마케팅,디지털 마케팅
+
+# ── 보안 (선택, 자세한 내용은 docs/security.md) ──
+ADMIN_USER=admin              # 웹 UI 로그인 (미설정 시 인증 비활성)
+ADMIN_PASSWORD_HASH=          # (권장) werkzeug 해시. 설정 시 ADMIN_PASSWORD 불필요
+FORCE_HTTPS=1                 # HTTPS(리버스 프록시) 운영 시 세션 쿠키 Secure
+COOKIE_ENCRYPTION_KEY=        # 미설정 시 data/.enc_key 자동 생성
+POSTER_PROXY=                 # poster 봇 감지 우회용 프록시 (권장: residential)
 ```
 
 | 키 | 발급처 |
@@ -140,6 +147,9 @@ SCHEDULED_KEYWORDS=AI 마케팅,디지털 마케팅
 | `NAVER_ID/PW` | 포스팅할 네이버 계정 |
 | `INSTAGRAM_ACCESS_TOKEN/ACCOUNT_ID` | [Meta for Developers](https://developers.facebook.com) — Instagram Graph API |
 | `UNSPLASH_ACCESS_KEY` | [Unsplash Developers](https://unsplash.com/developers) — 무료 발급 |
+
+> **보안**: 자격증명 보호(HTTPS·로그인 시도 제한·비밀번호 해시), 네이버 쿠키 at-rest 암호화,
+> poster 봇 감지 회피(stealth·프록시) 설정은 [`docs/security.md`](docs/security.md) 참고.
 
 ### 3. 네이버 로그인 쿠키 초기화 (poster 첫 실행 시, 로컬만)
 

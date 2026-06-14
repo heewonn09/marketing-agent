@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -13,27 +14,76 @@ from playwright.sync_api import TimeoutError as PWTimeout
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 _ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(_ROOT))
+from utils.secrets import load_encrypted_json, save_encrypted_json
+
 _COOKIE_PATH = _ROOT / "data" / "naver_cookies.json"
 _ERROR_SCREENSHOT = _ROOT / "data" / "poster_error.png"
 
+# 봇 탐지 회피용 stealth init 스크립트 (navigator 지문 위장)
+_STEALTH_JS = """
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+window.chrome = window.chrome || { runtime: {} };
+Object.defineProperty(navigator, 'languages', {get: () => ['ko-KR', 'ko']});
+Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+const _origQuery = window.navigator.permissions && window.navigator.permissions.query;
+if (_origQuery) {
+  window.navigator.permissions.query = (p) => (
+    p && p.name === 'notifications'
+      ? Promise.resolve({state: Notification.permission})
+      : _origQuery(p)
+  );
+}
+"""
+
 
 # ---------------------------------------------------------------------------
-# Cookie helpers
+# Cookie helpers (at-rest 암호화 + 레거시 평문 자동 마이그레이션)
 # ---------------------------------------------------------------------------
 
 def _load_cookies(context) -> bool:
     if not _COOKIE_PATH.exists():
         return False
-    with open(_COOKIE_PATH, encoding="utf-8") as f:
-        cookies = json.load(f)
+    cookies, was_encrypted = load_encrypted_json(_COOKIE_PATH)
     context.add_cookies(cookies)
+    if not was_encrypted:
+        # 평문 → 암호화 형식으로 즉시 마이그레이션
+        save_encrypted_json(_COOKIE_PATH, context.cookies())
+        print("쿠키 파일을 암호화 형식으로 마이그레이션했습니다.")
     return True
 
 
 def _save_cookies(context):
-    _COOKIE_PATH.parent.mkdir(exist_ok=True)
-    with open(_COOKIE_PATH, "w", encoding="utf-8") as f:
-        json.dump(context.cookies(), f, ensure_ascii=False, indent=2)
+    save_encrypted_json(_COOKIE_PATH, context.cookies())
+
+
+# ---------------------------------------------------------------------------
+# Stealth / proxy helpers
+# ---------------------------------------------------------------------------
+
+def _launch_kwargs(headless: bool) -> dict:
+    """봇 탐지 회피용 Chromium 실행 인자."""
+    args = [
+        "--disable-blink-features=AutomationControlled",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+    ]
+    return {"headless": headless, "args": args}
+
+
+def _proxy_config() -> dict | None:
+    """POSTER_PROXY 환경변수가 있으면 Playwright proxy 설정 반환."""
+    server = os.environ.get("POSTER_PROXY")
+    if not server:
+        return None
+    cfg = {"server": server}
+    user = os.environ.get("POSTER_PROXY_USER")
+    pwd = os.environ.get("POSTER_PROXY_PASS")
+    if user:
+        cfg["username"] = user
+    if pwd:
+        cfg["password"] = pwd
+    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -415,8 +465,8 @@ def main():
     headless = args.headless or (not os.environ.get("DISPLAY"))
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=headless)
-        context = browser.new_context(
+        browser = pw.chromium.launch(**_launch_kwargs(headless))
+        context_kwargs = dict(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -424,7 +474,16 @@ def main():
             ),
             viewport={"width": 1280, "height": 900},
             permissions=["clipboard-read", "clipboard-write"],
+            locale="ko-KR",
+            timezone_id="Asia/Seoul",
         )
+        proxy = _proxy_config()
+        if proxy:
+            context_kwargs["proxy"] = proxy
+            print(f"프록시 사용: {proxy['server']}")
+        context = browser.new_context(**context_kwargs)
+        # 모든 페이지에 stealth 스크립트 주입 (navigator.webdriver 등 위장)
+        context.add_init_script(_STEALTH_JS)
         page = context.new_page()
 
         try:

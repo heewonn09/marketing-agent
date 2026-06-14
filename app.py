@@ -14,6 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -21,31 +22,72 @@ sys.path.insert(0, str(Path(__file__).parent))
 from utils.job_store import init_db, upsert_job, get_job, list_jobs
 from utils.cleanup import cleanup_old_files
 from utils.notifier import notify_done, notify_error
-
-app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(32).hex()
+from utils.auth_guard import verify_credentials, LoginRateLimiter
 
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
 
+
+def _resolve_secret_key() -> str:
+    """SECRET_KEY 우선순위: env > data/.flask_secret 파일(영구) > 신규 생성.
+
+    os.urandom 폴백을 영구화해 재시작 시 세션이 무효화되지 않게 한다.
+    """
+    env_key = os.environ.get("SECRET_KEY")
+    if env_key:
+        return env_key
+    key_file = ROOT / "data" / ".flask_secret"
+    if key_file.exists():
+        return key_file.read_text().strip()
+    key = os.urandom(32).hex()
+    key_file.parent.mkdir(exist_ok=True)
+    key_file.write_text(key)
+    try:
+        os.chmod(key_file, 0o600)
+    except OSError:
+        pass
+    return key
+
+
+app = Flask(__name__)
+app.secret_key = _resolve_secret_key()
+
+# 리버스 프록시(HTTPS 종단) 뒤에서 동작 시 원래 스킴/호스트 인식
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# HTTPS 운영 시 FORCE_HTTPS=1 → 세션 쿠키 Secure 플래그
+_force_https = os.environ.get("FORCE_HTTPS", "").lower() in ("1", "true", "yes")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=_force_https,
+)
+
 ADMIN_USER = os.environ.get("ADMIN_USER", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 _AUTH_EXEMPT_PREFIXES = ("/stream/", "/cardnews/")
 _AUTH_EXEMPT_PATHS = ("/login",)
+
+_rate_limiter = LoginRateLimiter(max_attempts=5, window=300, lockout=900)
 
 jobs: dict[str, dict] = {}
 
 init_db(ROOT / "data" / "jobs.db")
 
 
+def _auth_enabled() -> bool:
+    return bool(ADMIN_USER) and bool(ADMIN_PASSWORD or ADMIN_PASSWORD_HASH)
+
+
 def _check_credentials(user: str, pwd: str) -> bool:
-    return bool(ADMIN_USER) and user == ADMIN_USER and pwd == ADMIN_PASSWORD
+    return verify_credentials(user, pwd, ADMIN_USER, ADMIN_PASSWORD, ADMIN_PASSWORD_HASH)
 
 
 @app.before_request
 def _require_auth():
-    if not ADMIN_USER or not ADMIN_PASSWORD:
+    if not _auth_enabled():
         return
     if request.path in _AUTH_EXEMPT_PATHS:
         return
@@ -55,10 +97,14 @@ def _require_auth():
         return
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Basic "):
+        if _rate_limiter.is_locked(request.remote_addr or "?"):
+            return Response("로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.", 429)
         try:
             user, pwd = base64.b64decode(auth[6:]).decode().split(":", 1)
             if _check_credentials(user, pwd):
+                _rate_limiter.register_success(request.remote_addr or "?")
                 return
+            _rate_limiter.register_failure(request.remote_addr or "?")
         except Exception:
             pass
     if "text/html" in request.headers.get("Accept", ""):
@@ -71,12 +117,18 @@ def _require_auth():
 def login():
     error = None
     if request.method == "POST":
+        ip = request.remote_addr or "?"
+        if _rate_limiter.is_locked(ip):
+            error = "로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요."
+            return render_template("login.html", error=error), 429
         user = request.form.get("username", "")
         pwd = request.form.get("password", "")
         if _check_credentials(user, pwd):
+            _rate_limiter.register_success(ip)
             session["authenticated"] = True
             next_url = request.args.get("next") or url_for("index")
             return redirect(next_url)
+        _rate_limiter.register_failure(ip)
         error = "아이디 또는 비밀번호가 올바르지 않습니다."
     return render_template("login.html", error=error)
 
