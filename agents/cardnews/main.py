@@ -148,136 +148,153 @@ def _draw_centered(draw: ImageDraw.ImageDraw, y: int, text: str,
     return y + (bbox[3] - bbox[1]) + 16
 
 
-# ── 슬라이드 1: 메인 타이틀 ─────────────────────────────────────────────────
+# ── 공용 헬퍼 (가독성/구조 개선) ────────────────────────────────────────────
+def _clean(text: str) -> str:
+    """마크다운 기호(**, *, 선행 #) 제거 + 공백 정리."""
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
+    text = re.sub(r"^#+\s*", "", text.strip())
+    return text.strip()
+
+
+def _first_sentences(text: str, max_chars: int) -> str:
+    """문장 경계로 잘라 '완결된' 텍스트만 반환 (중간 잘림 방지)."""
+    text = _clean(text)
+    if len(text) <= max_chars:
+        out = text
+    else:
+        parts = re.split(r"(?<=[.!?다요죠음])[\s.]+", text)
+        out = ""
+        for p in parts:
+            if not p:
+                continue
+            if out and len(out) + len(p) + 1 > max_chars:
+                break
+            out = (out + " " + p).strip()
+        if len(out) > max_chars:  # 첫 문장이 예산 초과 → 단어 경계로 자름 (중간 글자 안 끊기게)
+            trimmed = ""
+            for w in out.split():
+                if trimmed and len(trimmed) + len(w) + 1 > max_chars:
+                    break
+                trimmed = (trimmed + " " + w).strip()
+            out = trimmed
+    # 닫히지 않은 괄호 조각(예: "(ex.") 제거
+    if out.count("(") > out.count(")"):
+        out = out[: out.rfind("(")].rstrip(" ,")
+    return out.strip()
+
+
+def _page_index(draw: ImageDraw.ImageDraw, n: int, total: int = 4, on_light: bool = False) -> None:
+    """우하단 페이지 인덱스 (n/total) + 다음 장 유도 화살표."""
+    col = C_MID if on_light else C_WHITE
+    f = _find_font(28, bold=True)
+    txt = f"{n} / {total}"
+    w = int(draw.textlength(txt, font=f))
+    draw.text((SIZE - MARGIN - w, SIZE - 64), txt, font=f, fill=col)
+    if n < total:
+        af = _find_font(34, bold=True)
+        draw.text((SIZE - MARGIN - w - 50, SIZE - 67), "▶", font=af,
+                  fill=C_ACCENT_GOLD if not on_light else C_PURPLE)
+
+
+def _highlight_text(draw, x, y, text, font, text_col, bg_col, pad=(16, 8)):
+    """포인트 컬러 배경 블록 위에 텍스트 (강조용). 끝 x 반환."""
+    w = int(draw.textlength(text, font=font))
+    bbox = draw.textbbox((0, 0), text, font=font)
+    h = bbox[3] - bbox[1]
+    draw.rounded_rectangle([x, y - pad[1], x + w + pad[0] * 2, y + h + pad[1] + 6],
+                           radius=10, fill=bg_col)
+    draw.text((x + pad[0], y), text, font=font, fill=text_col)
+    return x + w + pad[0] * 2
+
+
+def _sentiment_pct(data: dict) -> int:
+    counts = {"긍정": 0, "중립": 0, "부정": 0}
+    for p in data.get("posts_sentiment", []):
+        counts[p.get("sentiment", "중립")] = counts.get(p.get("sentiment", "중립"), 0) + 1
+    total = sum(counts.values()) or 1
+    return counts["긍정"] * 100 // total
+
+
+def _interest_level(data: dict) -> str:
+    c = {"높음": 0, "중간": 0, "낮음": 0}
+    for it in data.get("interest_estimation", []):
+        c[it.get("level", "중간")] = c.get(it.get("level", "중간"), 0) + 1
+    return max(c, key=c.get) if any(c.values()) else "중간"
+
+
+# ── 슬라이드 1: 후킹형 표지 (히어로 수치) ───────────────────────────────────
 def make_slide1(data: dict) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE))
     _gradient_bg(img, C_GRAD_TOP, C_GRAD_BTM)
     draw = ImageDraw.Draw(img)
 
     keyword = data.get("keyword", "")
-
     analyzed_at = data.get("analyzed_at", "")
     try:
         date_str = datetime.fromisoformat(analyzed_at).strftime("%Y.%m.%d")
     except Exception:
         date_str = date.today().strftime("%Y.%m.%d")
 
-    search_trends = data.get("search_trends", [])
-    change_rate = ""
-    if search_trends:
-        cr = search_trends[0].get("change_rate", "")
-        if cr:
-            arrow = "↑" if cr.startswith("+") else "↓"
-            change_rate = f"검색량 {cr} {arrow}"
+    cr = ""
+    for t in data.get("search_trends", []):
+        if t.get("change_rate"):
+            cr = t["change_rate"]
+            break
 
-    # 배경 장식 원 (우측 상단)
-    draw.ellipse([SIZE - 220, -100, SIZE + 80, 200], fill=C_PURPLE_MID)
-    draw.ellipse([SIZE - 160, -60,  SIZE + 40, 160], fill=C_PURPLE_DEEP)
+    # 배경 장식 원
+    draw.ellipse([SIZE - 230, -110, SIZE + 90, 210], fill=C_PURPLE_MID)
+    draw.ellipse([SIZE - 165, -70, SIZE + 45, 165], fill=C_PURPLE_DEEP)
 
-    # 상단 레이블 (태그 배지 스타일)
-    tag_font = _find_font(28)
+    # 태그 배지
+    tag_font = _find_font(30, bold=True)
     tag_text = "마케팅 인사이트"
     tw = int(draw.textlength(tag_text, font=tag_font))
-    draw.rounded_rectangle([MARGIN - 4, MARGIN - 6, MARGIN + tw + 16, MARGIN + 38],
-                            radius=8, fill=(255, 255, 255, 30))
-    draw.text((MARGIN + 6, MARGIN), tag_text, font=tag_font, fill=C_ACCENT_LITE)
+    draw.rounded_rectangle([MARGIN, MARGIN, MARGIN + tw + 36, MARGIN + 52], radius=26, fill=C_PURPLE_DEEP)
+    draw.text((MARGIN + 18, MARGIN + 9), tag_text, font=tag_font, fill=C_WHITE)
 
-    # 키워드 (큰 텍스트, 줄바꿈)
-    kw_font = _find_font(76, bold=True)
-    lines = _wrap(keyword, kw_font, SIZE - MARGIN * 2)
-    y = 200
-    for line in lines:
+    # 키워드 (큰 텍스트)
+    kw_font = _find_font(82, bold=True)
+    y = 188
+    for line in _wrap(keyword, kw_font, SIZE - MARGIN * 2):
         y = _draw_centered(draw, y, line, kw_font, C_WHITE)
 
-    # 검색량 변화율 배지
-    if change_rate:
-        y += 20
-        badge_font = _find_font(46, bold=True)
-        tw = int(draw.textlength(change_rate, font=badge_font))
-        bw, bh = tw + 64, 72
-        bx = (SIZE - bw) // 2
-        draw.rounded_rectangle([bx, y, bx + bw, y + bh], radius=14,
-                                fill=C_PURPLE_LITE, outline=C_WHITE, width=2)
-        draw.text((bx + 32, y + 12), change_rate, font=badge_font, fill=C_PURPLE)
-        y += bh + 44
+    # 히어로 지표: 검색량 변화율 크게
+    y += 26
+    if cr:
+        up = cr.startswith("+")
+        hero_col = (150, 240, 170) if up else C_ACCENT_GOLD
+        arrow = "▲" if up else "▼"
+        _draw_centered(draw, y, "최근 검색량", _find_font(40, bold=True), C_ACCENT_LITE)
+        y += 60
+        num_font = _find_font(156, bold=True)
+        hero = f"{cr}{arrow}"
+        hw = int(draw.textlength(hero, font=num_font))
+        draw.text(((SIZE - hw) // 2, y), hero, font=num_font, fill=hero_col)
+        bb = draw.textbbox((0, 0), hero, font=num_font)
+        y += (bb[3] - bb[1]) + 56
+    else:
+        y += 10
 
-    # ── 핵심 지표 패널 ──
-    sentiment_counts = {"긍정": 0, "중립": 0, "부정": 0}
-    for p in data.get("posts_sentiment", []):
-        s = p.get("sentiment", "중립")
-        sentiment_counts[s] = sentiment_counts.get(s, 0) + 1
-    total_s = sum(sentiment_counts.values()) or 1
-    positive_pct = sentiment_counts["긍정"] * 100 // total_s
+    # 스탯 칩 2개 (관심도 / 긍정반응) — 고대비
+    chips = [("관심도", _interest_level(data)), ("긍정 반응", f"{_sentiment_pct(data)}%")]
+    gap = 30
+    chip_w = (SIZE - MARGIN * 2 - gap) // 2
+    chip_h = 132
+    lab_f = _find_font(28)
+    val_f = _find_font(52, bold=True)
+    for ci, (lab, val) in enumerate(chips):
+        cx0 = MARGIN + ci * (chip_w + gap)
+        draw.rounded_rectangle([cx0, y, cx0 + chip_w, y + chip_h], radius=22, fill=C_PURPLE_DEEP)
+        lw = int(draw.textlength(lab, font=lab_f))
+        draw.text((cx0 + (chip_w - lw) // 2, y + 26), lab, font=lab_f, fill=C_ACCENT_LITE)
+        vw = int(draw.textlength(val, font=val_f))
+        draw.text((cx0 + (chip_w - vw) // 2, y + 62), val, font=val_f, fill=C_WHITE)
 
-    int_counts = {"높음": 0, "중간": 0, "낮음": 0}
-    for item in data.get("interest_estimation", []):
-        lv = item.get("level", "중간")
-        int_counts[lv] = int_counts.get(lv, 0) + 1
-    interest_level = max(int_counts, key=int_counts.get) if any(int_counts.values()) else "중간"
-    competition_level = data.get("competition_saturation", {}).get("level", "미확인")
-
-    panel_h = 138
-    # 패널 그림자 + 배경
-    _shadow_rect(draw, [MARGIN, y, SIZE - MARGIN, y + panel_h], radius=20, shadow_offset=5)
-    draw.rounded_rectangle([MARGIN, y, SIZE - MARGIN, y + panel_h],
-                            radius=20, fill=C_PURPLE_DEEP)
-    # 패널 내 하이라이트 선
-    draw.line([(MARGIN + 20, y + 1), (SIZE - MARGIN - 20, y + 1)],
-              fill=(180, 160, 240), width=1)
-
-    stats = [("관심도", interest_level), ("경쟁강도", competition_level), ("긍정반응", f"{positive_pct}%")]
-    label_font = _find_font(24)
-    val_font = _find_font(38, bold=True)
-    col_w = (SIZE - MARGIN * 2) // 3
-    for si, (label, value) in enumerate(stats):
-        col_x = MARGIN + col_w * si
-        lw = int(draw.textlength(label, font=label_font))
-        draw.text((col_x + (col_w - lw) // 2, y + 20), label, font=label_font, fill=C_ACCENT_LITE)
-        vw = int(draw.textlength(value, font=val_font))
-        draw.text((col_x + (col_w - vw) // 2, y + 56), value, font=val_font, fill=C_WHITE)
-        if si < 2:
-            draw.line([(col_x + col_w, y + 22), (col_x + col_w, y + panel_h - 22)],
-                      fill=(150, 120, 200), width=1)
-
-    y += panel_h + 36
-
-    # ── 핵심 인사이트 2줄 ──
-    insights = data.get("insights", [])
-    insight_font = _find_font(28)
-    for insight in insights[:2]:
-        ilines = _wrap(insight, insight_font, SIZE - MARGIN * 2)
-        itext = (ilines[0] + "…") if len(ilines) > 1 else (ilines[0] if ilines else "")
-        if itext:
-            iw = int(draw.textlength(itext, insight_font))
-            draw.text(((SIZE - iw) // 2, y), itext, font=insight_font, fill=C_ACCENT_LITE)
-            y += 40
-
-    # ── 트렌드 요약 ──
-    trend_summary = data.get("trend_summary", "")
-    if trend_summary and y < SIZE - 220:
-        y += 28
-        draw.line([(MARGIN + 100, y), (SIZE - MARGIN - 100, y)], fill=(150, 120, 200), width=1)
-        y += 22
-        ts_font = _find_font(26)
-        ts_all = _wrap(trend_summary, ts_font, SIZE - MARGIN * 2)
-        ts_lines = ts_all[:2]
-        for ti, tline in enumerate(ts_lines):
-            if ti == 1 and len(ts_all) > 2:
-                tline = tline + "…"
-            tw = int(draw.textlength(tline, ts_font))
-            draw.text(((SIZE - tw) // 2, y), tline, font=ts_font, fill=(200, 180, 240))
-            y += 36
-
-    # 날짜
-    draw.text(
-        (MARGIN, SIZE - MARGIN - 40),
-        date_str,
-        font=_find_font(30),
-        fill=C_ACCENT_LITE,
-    )
-    # 하단 라인
-    draw.line([(MARGIN, SIZE - MARGIN), (SIZE - MARGIN, SIZE - MARGIN)],
-              fill=C_ACCENT_LITE, width=2)
+    # 하단: 넘겨보기 유도 + 날짜 + 페이지
+    _draw_centered(draw, SIZE - 150, "핵심 전략 보기 →", _find_font(34, bold=True), C_ACCENT_GOLD)
+    draw.text((MARGIN, SIZE - 62), date_str, font=_find_font(28), fill=C_ACCENT_LITE)
+    _page_index(draw, 1)
 
     return img
 
@@ -304,6 +321,7 @@ def make_slide2(data: dict) -> Image.Image:
     card_starts = [162, 162 + card_h + gap, 162 + (card_h + gap) * 2]
 
     for i, trend in enumerate(trends):
+        trend = _clean(trend)
         y0 = card_starts[i]
 
         # 카드 그림자 + 배경
@@ -338,19 +356,21 @@ def make_slide2(data: dict) -> Image.Image:
         draw.line([(MARGIN + 20, ty + 8), (SIZE - MARGIN - 20, ty + 8)],
                   fill=C_DIVIDER, width=1)
 
-        # 설명: 원본 텍스트 최대 3줄 (Gemini 요약 없이 자연스럽게 wrap)
+        # 설명: 완결된 문장만 (중간 잘림 방지)
         if ":" in trend:
             desc_raw = trend.split(":", 1)[1].strip()
         else:
             desc_raw = trend
+        desc_raw = _first_sentences(desc_raw, 92)
         desc_lines = _wrap(desc_raw, desc_font, SIZE - MARGIN * 2 - 40)[:3]
         dy = ty + 22
         for line in desc_lines:
             draw.text((MARGIN + 26, dy), line, font=desc_font, fill=C_MID)
             dy += 34
 
-    # 브랜드
-    _draw_centered(draw, SIZE - 52, "@auto.markai", brand_font, C_PURPLE)
+    # 브랜드 + 페이지
+    _draw_centered(draw, SIZE - 50, "@auto.markai", brand_font, C_PURPLE)
+    _page_index(draw, 2, on_light=True)
 
     return img
 
@@ -380,8 +400,8 @@ def make_slide3(data: dict) -> Image.Image:
     card_h = 200
 
     for i, item in enumerate(next_kws):
-        kw     = item.get("keyword", "") if isinstance(item, dict) else item
-        reason = item.get("reason", "")   if isinstance(item, dict) else ""
+        kw     = _clean(item.get("keyword", "") if isinstance(item, dict) else item)
+        reason = _first_sentences(item.get("reason", "") if isinstance(item, dict) else "", 54)
 
         cy = card_y_starts[i]
         # 카드 그림자 + 배경
@@ -417,10 +437,11 @@ def make_slide3(data: dict) -> Image.Image:
                 draw.text((MARGIN + 68, ry), rline, font=reason_font, fill=C_MID)
                 ry += 30
 
-    # 하단 메시지
-    _draw_centered(draw, SIZE - 68, "매주 월요일 네이버 실시간 데이터 업데이트",
-                   _find_font(28), C_PURPLE)
-    _draw_centered(draw, SIZE - 34, "@auto.markai", _find_font(24), C_MID)
+    # 하단 메시지 + 페이지
+    _draw_centered(draw, SIZE - 60, "매주 월요일 네이버 실시간 데이터 업데이트",
+                   _find_font(26), C_PURPLE)
+    _draw_centered(draw, SIZE - 30, "@auto.markai", _find_font(22), C_MID)
+    _page_index(draw, 3, on_light=True)
 
     return img
 
@@ -462,15 +483,14 @@ def make_slide4(data: dict) -> Image.Image:
         "감성 분석 & 타겟 인사이트",
     ]
     bullet_font = _find_font(30)
-    check_font  = _find_font(22, bold=True)
     for benefit in benefits:
-        # 체크 원형 배지
+        # 체크 원형 배지 (체크마크는 폰트 대신 선으로 직접 그림 — 글리프 깨짐 방지)
         cr = 18
         cx_icon = bx + 44 + cr
         cy_icon = y + 18
         draw.ellipse([cx_icon - cr, cy_icon - cr, cx_icon + cr, cy_icon + cr], fill=C_GREEN_LT)
-        cw = int(draw.textlength("✓", font=check_font))
-        draw.text((cx_icon - cw // 2, cy_icon - 13), "✓", font=check_font, fill=C_PURPLE_DEEP)
+        draw.line([(cx_icon - 8, cy_icon + 1), (cx_icon - 2, cy_icon + 7), (cx_icon + 9, cy_icon - 8)],
+                  fill=C_PURPLE_DEEP, width=4, joint="curve")
         draw.text((bx + 44 + cr * 2 + 14, y), benefit, font=bullet_font, fill=C_WHITE)
         y += 58
 
@@ -481,7 +501,9 @@ def make_slide4(data: dict) -> Image.Image:
 
     # CTA 버튼 스타일
     cta_font = _find_font(44, bold=True)
-    _draw_centered(draw, y, f"{ig_username} 팔로우", cta_font, C_WHITE)
+    y = _draw_centered(draw, y, f"{ig_username} 팔로우", cta_font, C_WHITE)
+    y += 40
+    _draw_centered(draw, y, "전체 인사이트는 캡션에서 확인 ↓", _find_font(32, bold=True), C_ACCENT_GOLD)
 
     # 하단 점 인디케이터 (4번째 점 활성 — 마지막 슬라이드)
     for j in range(4):
