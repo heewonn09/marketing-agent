@@ -118,8 +118,25 @@ def _is_logged_in(context, page) -> bool:
     return False
 
 
+def _paste_into(page, selector: str, value: str):
+    """클립보드 붙여넣기로 입력 — 네이버는 한 글자씩 타이핑(키 입력)을 봇으로
+    감지해 차단하므로, 브라우저 클립보드에 값을 넣고 Ctrl+V 로 붙여넣어 우회한다.
+    (서버에는 시스템 클립보드가 없어 pyperclip 대신 브라우저 clipboard API 사용)
+    클립보드가 막히면 fill() 로 폴백."""
+    field = page.locator(selector)
+    field.click()
+    time.sleep(0.4)
+    try:
+        page.evaluate("(v) => navigator.clipboard.writeText(v)", value)
+        time.sleep(0.2)
+        page.keyboard.press("Control+V")
+    except Exception:
+        field.fill(value)  # 클립보드 불가 시 한 번에 값 설정(타이핑 아님)
+    time.sleep(0.8)
+
+
 def _do_login(page, naver_id: str, naver_pw: str):
-    """실제 키보드 이벤트로 로그인 (IP보안 비활성화 후 입력)."""
+    """클립보드 붙여넣기 방식 로그인 (IP보안 비활성화 후 붙여넣기)."""
     print("로그인 페이지 접속...")
     page.goto("https://nid.naver.com/nidlogin.login", wait_until="domcontentloaded")
     time.sleep(2)
@@ -134,20 +151,11 @@ def _do_login(page, naver_id: str, naver_pw: str):
     except PWTimeout:
         pass
 
-    # 아이디 입력 (@naver.com 제거)
+    # 아이디/비밀번호 — 붙여넣기(Ctrl+V)로 입력 (@naver.com 제거)
     login_id = naver_id.split("@")[0] if "@" in naver_id else naver_id
-    id_field = page.locator("#id")
-    id_field.click()
-    time.sleep(0.4)
-    id_field.press_sequentially(login_id, delay=90)
-    time.sleep(0.8)
-
-    # 비밀번호 입력
-    pw_field = page.locator("#pw")
-    pw_field.click()
-    time.sleep(0.4)
-    pw_field.press_sequentially(naver_pw, delay=90)
-    time.sleep(0.8)
+    print("  아이디/비밀번호 붙여넣기 입력...")
+    _paste_into(page, "#id", login_id)
+    _paste_into(page, "#pw", naver_pw)
 
     page.click(".btn_login")
     page.wait_for_load_state("domcontentloaded", timeout=15000)
@@ -434,6 +442,19 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
 
     page.screenshot(path=str(_ROOT / "data" / "poster_final.png"))
     print("블로그 글 발행 완료!")
+
+    # 발행 후 URL 수집 (성과 트래킹용)
+    time.sleep(2)
+    try:
+        current_url = page.url
+        if (
+            "blog.naver.com" in current_url
+            and "PostWriteForm" not in current_url
+            and "nidlogin" not in current_url
+        ):
+            print(f"[RESULT_URL]:{current_url}")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
