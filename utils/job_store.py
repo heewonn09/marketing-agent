@@ -63,6 +63,26 @@ def get_job(job_id: str, db_path: Path | None = None) -> dict | None:
     }
 
 
+def list_jobs(limit: int = 20, db_path: Path | None = None) -> list[dict]:
+    path = db_path or _DEFAULT_DB
+    with sqlite3.connect(path) as conn:
+        rows = conn.execute(
+            "SELECT job_id, status, keywords, date, created_at FROM jobs "
+            "ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "job_id": row[0],
+            "status": row[1],
+            "keywords": json.loads(row[2] or "[]"),
+            "date": row[3],
+            "created_at": row[4],
+        }
+        for row in rows
+    ]
+
+
 def mark_interrupted(db_path: Path | None = None) -> int:
     path = db_path or _DEFAULT_DB
     with sqlite3.connect(path) as conn:

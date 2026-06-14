@@ -16,7 +16,7 @@ from flask import Flask, Response, jsonify, redirect, render_template, request, 
 load_dotenv(Path(__file__).parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).parent))
-from utils.job_store import init_db, upsert_job
+from utils.job_store import init_db, upsert_job, get_job, list_jobs
 from utils.cleanup import cleanup_old_files
 
 app = Flask(__name__)
@@ -278,6 +278,38 @@ def serve_cardnews(filename: str):
     if not img_path.exists() or img_path.suffix.lower() not in (".png", ".jpg", ".jpeg"):
         return "이미지를 찾을 수 없습니다", 404
     return send_file(str(img_path), mimetype="image/png")
+
+
+@app.route("/history")
+def history():
+    return jsonify(list_jobs(limit=20))
+
+
+@app.route("/rerun/<job_id>", methods=["POST"])
+def rerun(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"error": "잡을 찾을 수 없습니다"}), 404
+    keywords = job.get("keywords") or []
+    if not keywords:
+        return jsonify({"error": "키워드 정보가 없습니다"}), 400
+    new_id = uuid.uuid4().hex[:8]
+    jobs[new_id] = {"status": "running", "queue": queue.Queue(), "date": None}
+    upsert_job(new_id, "running", keywords)
+    threading.Thread(target=run_pipeline, args=(new_id, keywords), daemon=True).start()
+    return jsonify({"job_id": new_id, "keywords": keywords})
+
+
+@app.route("/cardnews-files/<report_date>/<path:keyword>")
+def cardnews_files(report_date: str, keyword: str):
+    import re as _re
+    safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+    files = [
+        f"cardnews_{safe_kw}_{report_date}_{i}.png"
+        for i in range(1, 5)
+        if (ROOT / "output" / f"cardnews_{safe_kw}_{report_date}_{i}.png").exists()
+    ]
+    return jsonify({"files": files})
 
 
 @app.route("/download/<report_date>")

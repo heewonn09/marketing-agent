@@ -5,80 +5,92 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>마케팅 자동화 시스템</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
             background: #f0f2f7;
             color: #2d3748;
             min-height: 100vh;
-            padding: 32px 20px;
+            padding: 28px 20px 48px;
         }
-
-        .container { max-width: 1100px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; }
 
         /* ── Header ── */
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 32px 40px;
+            padding: 24px 32px;
             border-radius: 16px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
-        header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-        header p  { font-size: 13px; opacity: 0.8; }
+        header h1 { font-size: 20px; font-weight: 700; margin-bottom: 3px; }
+        header p  { font-size: 12px; opacity: 0.75; }
+        .btn-logout {
+            padding: 8px 18px;
+            background: rgba(255,255,255,0.18);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        .btn-logout:hover { background: rgba(255,255,255,0.28); }
 
-        /* ── Layout ── */
+        /* ── Main layout ── */
         .layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: 18px;
             align-items: start;
+            margin-bottom: 18px;
         }
-        @media (max-width: 760px) {
-            .layout { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
 
         /* ── Card ── */
         .card {
             background: white;
             border-radius: 12px;
-            padding: 24px 28px;
-            margin-bottom: 18px;
+            padding: 22px 26px;
+            margin-bottom: 16px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.06);
         }
         .card:last-child { margin-bottom: 0; }
         .card-title {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             color: #718096;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
         }
 
         /* ── Input ── */
-        .input-row { display: flex; gap: 10px; }
+        .input-row { display: flex; gap: 8px; }
         .input-row input {
             flex: 1;
-            padding: 11px 16px;
+            padding: 10px 14px;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
-            font-size: 15px;
+            font-size: 14px;
             font-family: inherit;
             outline: none;
             transition: border-color 0.2s;
         }
         .input-row input:focus { border-color: #667eea; }
         .btn-run {
-            padding: 11px 26px;
+            padding: 10px 22px;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
             border-radius: 8px;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             font-family: inherit;
@@ -90,33 +102,34 @@
 
         /* ── Steps ── */
         #progress-card { display: none; }
-        .steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+        .steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
         .step {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 9px 13px;
-            border-radius: 8px;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 7px;
             background: #f7fafc;
-            font-size: 13px;
+            font-size: 12.5px;
             color: #a0aec0;
-            transition: all 0.25s;
+            transition: all 0.2s;
         }
         .step.active  { background: #ebf4ff; color: #2b6cb0; font-weight: 600; }
         .step.done    { background: #f0fff4; color: #276749; }
         .step.error   { background: #fff5f5; color: #c53030; }
-        .step-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+        .step-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+        .step-time { margin-left: auto; font-size: 11px; opacity: 0.55; white-space: nowrap; }
 
         /* ── Log ── */
         #log {
             background: #1a202c;
             color: #a0aec0;
             border-radius: 8px;
-            padding: 14px;
+            padding: 12px;
             font-family: 'Consolas', 'D2Coding', monospace;
             font-size: 11px;
             line-height: 1.6;
-            height: 190px;
+            height: 160px;
             overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-all;
@@ -125,148 +138,157 @@
         #log .log-err  { color: #fc8181; }
 
         /* ── Right panel ── */
-        .right-col { position: sticky; top: 24px; }
-
+        .right-col { position: sticky; top: 20px; }
         .results-panel {
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-            min-height: 300px;
+            min-height: 280px;
             overflow: hidden;
         }
-
         .panel-header {
-            padding: 18px 24px 16px;
+            padding: 16px 22px 14px;
             border-bottom: 1px solid #edf2f7;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
-        .panel-header-title { font-size: 14px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; }
-
+        .panel-header-title { font-size: 13px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; }
         .btn-download {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 9px 20px;
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 7px 16px;
             background: linear-gradient(135deg, #38a169, #2f855a);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            font-family: inherit;
-            text-decoration: none;
-            transition: opacity 0.2s;
-            white-space: nowrap;
+            color: white; border: none; border-radius: 7px;
+            font-size: 12px; font-weight: 700; cursor: pointer;
+            font-family: inherit; text-decoration: none;
+            transition: opacity 0.2s; white-space: nowrap;
         }
         .btn-download:hover { opacity: 0.88; }
         .btn-download.hidden { display: none; }
 
         /* ── Placeholder ── */
         .placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 60px 24px;
-            color: #cbd5e0;
-            text-align: center;
-            gap: 12px;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 50px 20px;
+            color: #cbd5e0; text-align: center; gap: 10px;
         }
-        .placeholder-icon { font-size: 40px; }
-        .placeholder p { font-size: 14px; line-height: 1.6; }
+        .placeholder-icon { font-size: 36px; }
+        .placeholder p { font-size: 13px; line-height: 1.6; }
         .placeholder.hidden { display: none; }
 
+        /* ── Cardnews gallery ── */
+        #cardnews-gallery { display: none; padding: 16px 18px 4px; }
+        .gallery-title { font-size: 12px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+        .gallery-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+        }
+        .gallery-img {
+            width: 100%; aspect-ratio: 1; object-fit: cover;
+            border-radius: 8px; cursor: pointer;
+            border: 2px solid #e2e8f0;
+            transition: border-color 0.2s, transform 0.15s;
+        }
+        .gallery-img:hover { border-color: #667eea; transform: scale(1.02); }
+
+        /* lightbox */
+        #lightbox {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.82); z-index: 999;
+            align-items: center; justify-content: center;
+        }
+        #lightbox.open { display: flex; }
+        #lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 12px; }
+        #lightbox .close-btn {
+            position: absolute; top: 20px; right: 24px;
+            font-size: 28px; color: white; cursor: pointer;
+            background: none; border: none; line-height: 1;
+        }
+
         /* ── Content cards ── */
-        #content-cards { padding: 20px 20px 24px; display: none; }
-
-        .kw-section + .kw-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid #edf2f7; }
-        .kw-label {
-            font-size: 12px;
-            font-weight: 700;
-            color: #667eea;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 14px;
-        }
-
-        .result-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
+        #content-cards { padding: 14px 18px 20px; display: none; }
+        .kw-section + .kw-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid #edf2f7; }
+        .kw-label { font-size: 11px; font-weight: 700; color: #667eea; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+        .result-card { border: 1px solid #e2e8f0; border-radius: 9px; overflow: hidden; margin-bottom: 10px; }
         .result-card:last-child { margin-bottom: 0; }
-
-        .rc-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 11px 16px;
-            background: #f7fafc;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .rc-type {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            font-weight: 700;
-            color: #4a5568;
-        }
-        .rc-icon { font-size: 16px; }
-
+        .rc-header { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; background: #f7fafc; border-bottom: 1px solid #e2e8f0; }
+        .rc-type { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: #4a5568; }
         .btn-copy {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 5px 12px;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #718096;
-            cursor: pointer;
-            font-family: inherit;
-            transition: all 0.15s;
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 10px; background: white;
+            border: 1px solid #e2e8f0; border-radius: 5px;
+            font-size: 11px; font-weight: 600; color: #718096;
+            cursor: pointer; font-family: inherit; transition: all 0.15s;
         }
         .btn-copy:hover { background: #667eea; color: white; border-color: #667eea; }
         .btn-copy.copied { background: #38a169; color: white; border-color: #38a169; }
+        .rc-body { padding: 12px 14px; }
+        .rc-main { font-size: 13px; font-weight: 600; color: #2d3748; line-height: 1.5; margin-bottom: 7px; }
+        .rc-sub  { font-size: 12px; color: #718096; line-height: 1.5; margin-bottom: 7px; }
+        .rc-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+        .tag { font-size: 11px; background: #ebf4ff; color: #3182ce; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
 
-        .rc-body { padding: 14px 16px; }
-        .rc-main { font-size: 14px; font-weight: 600; color: #2d3748; line-height: 1.5; margin-bottom: 8px; }
-        .rc-sub  { font-size: 13px; color: #718096; line-height: 1.5; margin-bottom: 8px; }
-        .rc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-        .tag {
-            font-size: 12px;
-            background: #ebf4ff;
-            color: #3182ce;
-            padding: 3px 9px;
-            border-radius: 20px;
-            font-weight: 500;
-        }
-
-        /* loading spinner */
-        .loading-cards {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 24px 20px;
-            color: #a0aec0;
-            font-size: 13px;
-        }
-        .spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid #e2e8f0;
-            border-top-color: #667eea;
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
+        .loading-cards { display: flex; align-items: center; gap: 8px; padding: 20px 18px; color: #a0aec0; font-size: 13px; }
+        .spinner { width: 14px; height: 14px; border: 2px solid #e2e8f0; border-top-color: #667eea; border-radius: 50%; animation: spin 0.7s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── History ── */
+        .history-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            overflow: hidden;
+        }
+        .history-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 22px 14px;
+            border-bottom: 1px solid #edf2f7;
+        }
+        .history-header-title { font-size: 13px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.05em; }
+        .btn-refresh {
+            padding: 5px 14px;
+            background: #f7fafc; border: 1px solid #e2e8f0;
+            border-radius: 6px; font-size: 12px; font-weight: 600;
+            color: #4a5568; cursor: pointer; font-family: inherit;
+            transition: all 0.15s;
+        }
+        .btn-refresh:hover { background: #667eea; color: white; border-color: #667eea; }
+
+        #history-list { padding: 8px 0; }
+        .history-empty { padding: 28px 22px; font-size: 13px; color: #a0aec0; text-align: center; }
+
+        .history-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 22px;
+            border-bottom: 1px solid #f7fafc;
+            transition: background 0.15s;
+        }
+        .history-item:last-child { border-bottom: none; }
+        .history-item:hover { background: #f7fafc; }
+
+        .hi-status {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .hi-status.done        { background: #38a169; }
+        .hi-status.running     { background: #667eea; animation: pulse 1.2s infinite; }
+        .hi-status.error       { background: #e53e3e; }
+        .hi-status.interrupted { background: #dd6b20; }
+
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .hi-info { flex: 1; min-width: 0; }
+        .hi-kw { font-size: 13px; font-weight: 600; color: #2d3748; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .hi-meta { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+
+        .hi-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .btn-hist {
+            padding: 5px 12px;
+            border: 1px solid #e2e8f0; border-radius: 6px;
+            font-size: 11px; font-weight: 600; background: white;
+            cursor: pointer; font-family: inherit; color: #4a5568;
+            transition: all 0.15s; white-space: nowrap;
+        }
+        .btn-hist:hover { background: #667eea; color: white; border-color: #667eea; }
+        .btn-hist.rerun:hover { background: #38a169; border-color: #38a169; }
     </style>
 </head>
 <body>
@@ -275,8 +297,9 @@
     <header>
         <div>
             <h1>마케팅 자동화 시스템</h1>
-            <p>키워드 하나로 수집 → 분석 → 콘텐츠 생성 → 리포트 → 모니터 → 포스팅 → 인스타그램까지 자동 실행</p>
+            <p>수집 → 분석 → 콘텐츠 생성 → 카드뉴스 → 리포트 → 포스팅 → 인스타그램 자동 실행</p>
         </div>
+        <a href="/logout" class="btn-logout">로그아웃</a>
     </header>
 
     <div class="layout">
@@ -293,10 +316,8 @@
             </div>
 
             <div class="card" id="progress-card">
-                <div class="card-title">진행 상황</div>
-                <div class="steps" id="steps-container">
-                    <!-- JS로 동적 생성 -->
-                </div>
+                <div class="card-title" id="progress-title">진행 상황</div>
+                <div class="steps" id="steps-container"></div>
                 <div id="log"></div>
             </div>
 
@@ -308,14 +329,18 @@
 
                 <div class="panel-header">
                     <span class="panel-header-title">결과</span>
-                    <a class="btn-download hidden" id="btn-download" href="#">
-                        ⬇ 리포트 PDF
-                    </a>
+                    <a class="btn-download hidden" id="btn-download" href="#">⬇ PDF 리포트</a>
                 </div>
 
                 <div class="placeholder" id="placeholder">
                     <div class="placeholder-icon">📊</div>
                     <p>파이프라인을 실행하면<br>콘텐츠 결과가 여기에 표시됩니다.</p>
+                </div>
+
+                <!-- 카드뉴스 미리보기 -->
+                <div id="cardnews-gallery">
+                    <div class="gallery-title">카드뉴스 미리보기</div>
+                    <div class="gallery-grid" id="gallery-grid"></div>
                 </div>
 
                 <div id="content-cards"></div>
@@ -324,56 +349,86 @@
         </div>
 
     </div>
+
+    <!-- ── 히스토리 ── -->
+    <div class="history-section">
+        <div class="history-header">
+            <span class="history-header-title">최근 실행 히스토리</span>
+            <button class="btn-refresh" onclick="loadHistory()">↻ 새로고침</button>
+        </div>
+        <div id="history-list">
+            <div class="history-empty">불러오는 중...</div>
+        </div>
+    </div>
+
+</div>
+
+<!-- 라이트박스 -->
+<div id="lightbox" onclick="closeLightbox()">
+    <button class="close-btn" onclick="closeLightbox()">✕</button>
+    <img id="lightbox-img" src="" alt="">
 </div>
 
 <script>
-    // ── 상태 ──
+    // ── 스텝 정의 (소요 시간 추정 포함) ──
     const STEPS_DEF = [
-        { id: 'step-collect',   label: '1/7  수집 (collector)' },
-        { id: 'step-analyze',   label: '2/7  분석 (analyzer)' },
-        { id: 'step-write',     label: '3/7  작성 (writer)' },
-        { id: 'step-report',    label: '4/7  리포트 (reporter)' },
-        { id: 'step-monitor',   label: '5/7  모니터 (monitor)' },
-        { id: 'step-post',      label: '6/7  포스팅 (poster)' },
-        { id: 'step-instagram', label: '7/7  인스타그램 (instagram)' },
+        { id: 'step-collect',   label: '수집',       sub: 'collector',  time: '~30초' },
+        { id: 'step-analyze',   label: '분석',       sub: 'analyzer',   time: '~1분'  },
+        { id: 'step-write',     label: '작성',       sub: 'writer',     time: '~45초' },
+        { id: 'step-report',    label: '리포트',     sub: 'reporter',   time: '~2분'  },
+        { id: 'step-monitor',   label: '모니터',     sub: 'monitor',    time: '~30초' },
+        { id: 'step-cardnews',  label: '카드뉴스',   sub: 'cardnews',   time: '~1분'  },
+        { id: 'step-post',      label: '포스팅',     sub: 'poster',     time: '~30초' },
+        { id: 'step-instagram', label: '인스타그램', sub: 'instagram',  time: '~1분'  },
     ];
+
+    const STEP_MAP = {
+        '수집':'step-collect','collector':'step-collect',
+        '분석':'step-analyze','analyzer':'step-analyze',
+        '작성':'step-write','writer':'step-write',
+        '리포트':'step-report','reporter':'step-report',
+        '모니터':'step-monitor','monitor':'step-monitor',
+        '카드뉴스':'step-cardnews','cardnews':'step-cardnews',
+        '포스팅':'step-post','poster':'step-post',
+        '인스타그램':'step-instagram','instagram':'step-instagram',
+    };
+
     let currentStepEl = null;
     let currentKeywords = [];
+    let currentReportDate = null;
 
     // ── 스텝 초기화 ──
-    function initSteps() {
+    function initSteps(keywords) {
         const container = document.getElementById('steps-container');
         container.innerHTML = '';
+        const kwCount = keywords.length;
+
         STEPS_DEF.forEach(s => {
             const div = document.createElement('div');
             div.className = 'step';
             div.id = s.id;
-            div.innerHTML = `<span class="step-icon">⏳</span> ${s.label}`;
+
+            // 키워드가 여러 개면 per-keyword 스텝에 개수 표시
+            const perKw = ['step-collect','step-analyze','step-write','step-cardnews','step-post','step-instagram'];
+            const countTag = (kwCount > 1 && perKw.includes(s.id))
+                ? ` <span style="font-size:10px;opacity:0.6">×${kwCount}</span>` : '';
+
+            div.innerHTML = `<span class="step-icon">⏳</span> ${s.label} <span style="color:#a0aec0;font-size:11px">(${s.sub})</span>${countTag}<span class="step-time">${s.time}</span>`;
             container.appendChild(div);
         });
         currentStepEl = null;
     }
 
     function setStepByName(name, state) {
-        // 스텝 이름에서 번호 또는 키워드로 매칭
-        const stepMap = {
-            '수집': 'step-collect',     'collector': 'step-collect',
-            '분석': 'step-analyze',     'analyzer': 'step-analyze',
-            '작성': 'step-write',       'writer': 'step-write',
-            '리포트': 'step-report',    'reporter': 'step-report',
-            '모니터': 'step-monitor',   'monitor': 'step-monitor',
-            '포스팅': 'step-post',      'poster': 'step-post',
-            '인스타그램': 'step-instagram', 'instagram': 'step-instagram',
-        };
         let el = null;
-        for (const [key, id] of Object.entries(stepMap)) {
+        for (const [key, id] of Object.entries(STEP_MAP)) {
             if (name.includes(key)) { el = document.getElementById(id); break; }
         }
         if (!el) return;
         el.className = 'step ' + state;
         const icons = { active: '▶', done: '✓', error: '✗' };
         el.querySelector('.step-icon').textContent = icons[state] || '⏳';
-        currentStepEl = state === 'active' ? el : currentStepEl;
+        if (state === 'active') currentStepEl = el;
     }
 
     // ── 로그 ──
@@ -387,11 +442,12 @@
     }
 
     // ── 파이프라인 시작 ──
-    function startPipeline() {
-        const keywordInput = document.getElementById('keyword').value.trim();
-        if (!keywordInput) { alert('키워드를 입력하세요.'); return; }
+    function startPipeline(keywordStr, jobIdOverride) {
+        const input = keywordStr || document.getElementById('keyword').value.trim();
+        if (!input) { alert('키워드를 입력하세요.'); return; }
 
-        currentKeywords = keywordInput.split(',').map(k => k.trim()).filter(Boolean);
+        currentKeywords = input.split(',').map(k => k.trim()).filter(Boolean);
+        currentReportDate = null;
 
         document.getElementById('log').innerHTML = '';
         document.getElementById('progress-card').style.display = 'block';
@@ -400,13 +456,20 @@
         document.getElementById('placeholder').classList.remove('hidden');
         document.getElementById('content-cards').style.display = 'none';
         document.getElementById('content-cards').innerHTML = '';
+        document.getElementById('cardnews-gallery').style.display = 'none';
 
-        initSteps();
+        initSteps(currentKeywords);
+
+        if (jobIdOverride) {
+            // 재실행: 이미 서버에서 job 생성됨
+            listenStream(jobIdOverride);
+            return;
+        }
 
         fetch('/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ keyword: keywordInput }),
+            body: JSON.stringify({ keyword: input }),
         })
         .then(r => r.json())
         .then(({ job_id, error }) => {
@@ -441,11 +504,10 @@
                     currentStepEl.className = 'step error';
                     currentStepEl.querySelector('.step-icon').textContent = '✗';
                 }
-                // 스트림은 닫지 않음 — non-fatal 에러 후 다음 스텝이 이어질 수 있음
-                // 스트림 종료는 DONE 메시지에서만 처리
 
             } else if (msg.startsWith('DONE:')) {
                 const reportDate = msg.slice(5);
+                currentReportDate = reportDate;
                 if (currentStepEl) {
                     currentStepEl.className = 'step done';
                     currentStepEl.querySelector('.step-icon').textContent = '✓';
@@ -453,10 +515,12 @@
                 es.close();
                 onDone(reportDate);
                 document.getElementById('btn-run').disabled = false;
+                setTimeout(loadHistory, 500);
 
             } else if (msg === 'DONE') {
                 es.close();
                 document.getElementById('btn-run').disabled = false;
+                setTimeout(loadHistory, 500);
             }
         };
 
@@ -469,18 +533,19 @@
 
     // ── 완료 처리 ──
     function onDone(reportDate) {
-        // PDF 버튼
         const btnDl = document.getElementById('btn-download');
         btnDl.href = '/download/' + reportDate;
         btnDl.classList.remove('hidden');
 
-        // 콘텐츠 카드 로딩
         const cardsEl = document.getElementById('content-cards');
         document.getElementById('placeholder').classList.add('hidden');
         cardsEl.style.display = 'block';
         cardsEl.innerHTML = '<div class="loading-cards"><div class="spinner"></div> 콘텐츠 불러오는 중...</div>';
 
-        // 키워드별 순서대로 fetch
+        // 카드뉴스 미리보기
+        loadCardnews(reportDate);
+
+        // 콘텐츠 카드
         const fetches = currentKeywords.map(kw =>
             fetch(`/result/${reportDate}/${encodeURIComponent(kw)}`)
                 .then(r => r.json())
@@ -490,13 +555,50 @@
 
         Promise.all(fetches).then(results => {
             cardsEl.innerHTML = '';
-            results.forEach(({ kw, data }) => {
-                cardsEl.appendChild(buildKeywordSection(kw, data));
-            });
+            results.forEach(({ kw, data }) => cardsEl.appendChild(buildKeywordSection(kw, data)));
         });
     }
 
-    // ── 키워드 섹션 빌드 ──
+    // ── 카드뉴스 갤러리 ──
+    function loadCardnews(reportDate) {
+        const gallery = document.getElementById('cardnews-gallery');
+        const grid = document.getElementById('gallery-grid');
+        grid.innerHTML = '';
+
+        const fetches = currentKeywords.map(kw =>
+            fetch(`/cardnews-files/${reportDate}/${encodeURIComponent(kw)}`)
+                .then(r => r.json())
+                .catch(() => ({ files: [] }))
+        );
+
+        Promise.all(fetches).then(results => {
+            const allFiles = results.flatMap(r => r.files || []);
+            if (!allFiles.length) return;
+
+            allFiles.forEach(fname => {
+                const img = document.createElement('img');
+                img.className = 'gallery-img';
+                img.src = `/cardnews/${encodeURIComponent(fname)}`;
+                img.alt = fname;
+                img.loading = 'lazy';
+                img.onclick = () => openLightbox(img.src);
+                grid.appendChild(img);
+            });
+
+            gallery.style.display = 'block';
+        });
+    }
+
+    function openLightbox(src) {
+        document.getElementById('lightbox-img').src = src;
+        document.getElementById('lightbox').classList.add('open');
+    }
+    function closeLightbox() {
+        document.getElementById('lightbox').classList.remove('open');
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+    // ── 콘텐츠 카드 빌드 ──
     function buildKeywordSection(keyword, data) {
         const section = document.createElement('div');
         section.className = 'kw-section';
@@ -510,7 +612,7 @@
 
         if (!data || data.error) {
             const err = document.createElement('div');
-            err.style.cssText = 'font-size:13px;color:#a0aec0;padding:8px 0';
+            err.style.cssText = 'font-size:12px;color:#a0aec0;padding:6px 0';
             err.textContent = '콘텐츠 파일을 찾을 수 없습니다.';
             section.appendChild(err);
             return section;
@@ -520,41 +622,18 @@
         const insta = data.instagram || {};
         const ad = data.ad_copy || {};
 
-        // 네이버 블로그
-        const blogCopyText = [
-            blog.title,
-            blog.hashtags ? blog.hashtags.join(' ') : ''
-        ].filter(Boolean).join('\n');
+        section.appendChild(buildCard('📝', '네이버 블로그',
+            [blog.title, (blog.hashtags||[]).join(' ')].filter(Boolean).join('\n'),
+            `<div class="rc-main">${esc(blog.title||'')}</div>` + buildTags(blog.hashtags)));
 
-        section.appendChild(buildCard(
-            '📝', '네이버 블로그',
-            blogCopyText,
-            `<div class="rc-main">${esc(blog.title || '')}</div>` +
-            buildTags(blog.hashtags)
-        ));
+        section.appendChild(buildCard('📸', '인스타그램',
+            [insta.caption, (insta.hashtags||[]).join(' ')].filter(Boolean).join('\n\n'),
+            `<div class="rc-main">${esc(insta.caption||'')}</div>` + buildTags(insta.hashtags)));
 
-        // 인스타그램
-        const instaCopyText = [
-            insta.caption,
-            insta.hashtags ? insta.hashtags.join(' ') : ''
-        ].filter(Boolean).join('\n\n');
-
-        section.appendChild(buildCard(
-            '📸', '인스타그램',
-            instaCopyText,
-            `<div class="rc-main">${esc(insta.caption || '')}</div>` +
-            buildTags(insta.hashtags)
-        ));
-
-        // 광고 카피
-        const adCopyText = [ad.headline, ad.subheadline].filter(Boolean).join('\n');
-
-        section.appendChild(buildCard(
-            '📣', '광고 카피',
-            adCopyText,
-            `<div class="rc-main">${esc(ad.headline || '')}</div>` +
-            (ad.subheadline ? `<div class="rc-sub">${esc(ad.subheadline)}</div>` : '')
-        ));
+        section.appendChild(buildCard('📣', '광고 카피',
+            [ad.headline, ad.subheadline].filter(Boolean).join('\n'),
+            `<div class="rc-main">${esc(ad.headline||'')}</div>` +
+            (ad.subheadline ? `<div class="rc-sub">${esc(ad.subheadline)}</div>` : '')));
 
         return section;
     }
@@ -564,55 +643,118 @@
         card.className = 'result-card';
         card.innerHTML = `
             <div class="rc-header">
-                <div class="rc-type">
-                    <span class="rc-icon">${icon}</span>${type}
-                </div>
-                <button class="btn-copy" onclick="copyText(this, ${JSON.stringify(copyText)})">
-                    복사
-                </button>
+                <div class="rc-type"><span>${icon}</span>${type}</div>
+                <button class="btn-copy" onclick="copyText(this, ${JSON.stringify(copyText)})">복사</button>
             </div>
-            <div class="rc-body">${bodyHtml}</div>
-        `;
+            <div class="rc-body">${bodyHtml}</div>`;
         return card;
     }
 
     function buildTags(tags) {
         if (!tags || !tags.length) return '';
-        return `<div class="rc-tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>`;
+        return `<div class="rc-tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`;
     }
 
     function esc(str) {
-        return String(str)
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    // ── 복사 ──
     function copyText(btn, text) {
-        navigator.clipboard.writeText(text).then(() => {
-            btn.textContent = '✓ 복사됨';
-            btn.classList.add('copied');
-            setTimeout(() => {
-                btn.textContent = '복사';
-                btn.classList.remove('copied');
-            }, 1800);
-        }).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            btn.textContent = '✓ 복사됨';
-            btn.classList.add('copied');
+        const done = () => {
+            btn.textContent = '✓ 복사됨'; btn.classList.add('copied');
             setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1800);
+        };
+        navigator.clipboard.writeText(text).then(done).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text; document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta); done();
         });
+    }
+
+    // ── 히스토리 ──
+    function loadHistory() {
+        fetch('/history').then(r => r.json()).then(jobs => {
+            const list = document.getElementById('history-list');
+            if (!jobs.length) {
+                list.innerHTML = '<div class="history-empty">실행 기록이 없습니다.</div>';
+                return;
+            }
+            list.innerHTML = '';
+            jobs.forEach(job => list.appendChild(buildHistoryItem(job)));
+        }).catch(() => {});
+    }
+
+    function buildHistoryItem(job) {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+
+        const statusCls = { done: 'done', running: 'running', error: 'error', interrupted: 'interrupted' }[job.status] || 'error';
+        const statusLabel = { done: '완료', running: '실행 중', error: '오류', interrupted: '중단' }[job.status] || job.status;
+
+        const kws = (job.keywords || []).join(', ') || '(키워드 없음)';
+        const dateStr = job.date || '';
+        const createdAt = job.created_at ? job.created_at.slice(0,16).replace('T',' ') : '';
+
+        let actionsHtml = '';
+        if (job.status === 'done' && dateStr) {
+            actionsHtml += `<button class="btn-hist" onclick="showResult('${dateStr}', ${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
+        }
+        if (job.keywords && job.keywords.length) {
+            actionsHtml += `<button class="btn-hist rerun" onclick="rerunJob('${job.job_id}')">재실행</button>`;
+        }
+
+        item.innerHTML = `
+            <div class="hi-status ${statusCls}"></div>
+            <div class="hi-info">
+                <div class="hi-kw">${esc(kws)}</div>
+                <div class="hi-meta">${statusLabel}${dateStr ? ' · ' + dateStr : ''} · ${createdAt}</div>
+            </div>
+            <div class="hi-actions">${actionsHtml}</div>`;
+        return item;
+    }
+
+    function showResult(reportDate, keywords) {
+        currentKeywords = keywords;
+        currentReportDate = reportDate;
+        document.getElementById('placeholder').classList.add('hidden');
+        document.getElementById('content-cards').style.display = 'block';
+        document.getElementById('content-cards').innerHTML =
+            '<div class="loading-cards"><div class="spinner"></div> 콘텐츠 불러오는 중...</div>';
+        document.getElementById('btn-download').href = '/download/' + reportDate;
+        document.getElementById('btn-download').classList.remove('hidden');
+
+        loadCardnews(reportDate);
+
+        const fetches = keywords.map(kw =>
+            fetch(`/result/${reportDate}/${encodeURIComponent(kw)}`)
+                .then(r => r.json()).then(data => ({ kw, data })).catch(() => ({ kw, data: null }))
+        );
+        Promise.all(fetches).then(results => {
+            const cardsEl = document.getElementById('content-cards');
+            cardsEl.innerHTML = '';
+            results.forEach(({ kw, data }) => cardsEl.appendChild(buildKeywordSection(kw, data)));
+        });
+    }
+
+    function rerunJob(jobId) {
+        if (!confirm('같은 키워드로 파이프라인을 다시 실행할까요?')) return;
+        fetch(`/rerun/${jobId}`, { method: 'POST' })
+            .then(r => r.json())
+            .then(({ job_id, keywords, error }) => {
+                if (error) { alert(error); return; }
+                document.getElementById('keyword').value = (keywords||[]).join(', ');
+                currentKeywords = keywords || [];
+                startPipeline(currentKeywords.join(','), job_id);
+            });
     }
 
     // Enter 키 실행
     document.getElementById('keyword').addEventListener('keydown', e => {
         if (e.key === 'Enter') startPipeline();
     });
+
+    // 페이지 로드 시 히스토리 로딩
+    loadHistory();
 </script>
 </body>
 </html>
