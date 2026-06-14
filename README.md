@@ -207,7 +207,20 @@ python agents/poster/main.py --keyword "AI 마케팅" --date 2026-06-11
 
 # 7. Instagram 포스팅
 python agents/instagram/main.py --keyword "AI 마케팅" --date 2026-06-11
+
+# 헬스체크 (각 에이전트가 오늘자 출력을 생성했는지 점검 → logs/healthcheck_*.log)
+python agents/healthcheck/main.py --once
 ```
+
+---
+
+## 테스트 / CI
+
+```bash
+.\venv\Scripts\python.exe -m pytest tests/ -q
+```
+
+`main` 푸시·PR 시 GitHub Actions(`.github/workflows/ci.yml`)가 자동으로 `pytest`를 실행합니다.
 
 ---
 

@@ -1,9 +1,8 @@
 from datetime import date
-from pathlib import Path
 
 import pytest
 
-from agents.monitor.main import AgentDef, CheckResult, check_agent
+from agents.healthcheck.main import AgentDef, CheckResult, check_agent
 
 
 @pytest.fixture
@@ -49,6 +48,7 @@ def test_check_agent_excludes_prefix(tmp_path):
     script.parent.mkdir(parents=True)
     script.touch()
     output_dir.mkdir()
+    # analyzed_ 파일은 collector 출력으로 카운트되면 안 됨
     (output_dir / "analyzed_test_2026-06-08.json").write_text("[]")
     agent = AgentDef(
         number=1,
@@ -80,3 +80,10 @@ def test_check_agent_ok_with_exclude_prefix(tmp_path):
     )
     result = check_agent(agent, date(2026, 6, 8))
     assert result.status == "OK"
+
+
+def test_check_agent_returns_checkresult_type(tmp_agent):
+    tmp_agent.script.touch()
+    result = check_agent(tmp_agent, date(2026, 6, 8))
+    assert isinstance(result, CheckResult)
+    assert result.agent is tmp_agent
