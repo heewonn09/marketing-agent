@@ -29,19 +29,18 @@
         header h1 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
         header p  { font-size: 12px; opacity: 0.75; }
         .btn-logout {
-            padding: 7px 16px;
-            background: rgba(255,255,255,0.18);
-            color: white;
-            border: 1px solid rgba(255,255,255,0.35);
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 600;
+            padding: 4px 2px;
+            background: transparent;
+            color: rgba(255,255,255,0.55);
+            border: none;
+            font-size: 12px;
+            font-weight: 500;
             cursor: pointer;
             text-decoration: none;
             white-space: nowrap;
-            transition: background 0.2s;
+            transition: color 0.2s;
         }
-        .btn-logout:hover { background: rgba(255,255,255,0.28); }
+        .btn-logout:hover { color: rgba(255,255,255,0.9); }
 
         .layout {
             display: grid;
@@ -402,7 +401,8 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             pointer-events: none;
         }
-        .donut-center-val { font-size: 20px; font-weight: 700; color: #2d3748; line-height: 1; }
+        /* 성공률 수치는 녹색으로 — 주변 빨간 영역과 색상 혼동 방지 */
+        .donut-center-val { font-size: 20px; font-weight: 700; color: #38a169; line-height: 1; }
         .donut-center-lbl { font-size: 9px; color: #a0aec0; font-weight: 700; text-transform: uppercase; margin-top: 2px; letter-spacing: 0.04em; }
         .analytics-legend { display: flex; flex-direction: column; gap: 7px; }
         .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4a5568; }
@@ -414,9 +414,10 @@
         .stats-grid {
             display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; flex: 1; min-width: 0;
         }
-        .stat-item { display: flex; flex-direction: column; gap: 2px; }
-        .stat-value { font-size: 20px; font-weight: 700; color: #2d3748; line-height: 1.2; }
+        /* 라벨 상단(작고 흐림) → 수치 하단(크고 굵게) — 표준 데이터 카드 위계 */
+        .stat-item { display: flex; flex-direction: column; gap: 3px; }
         .stat-label { font-size: 10px; color: #a0aec0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 20px; font-weight: 700; color: #2d3748; line-height: 1.1; }
         .stat-sub   { font-size: 11px; color: #667eea; font-weight: 600; margin-top: 1px; }
 
         @media (max-width: 700px) {
@@ -436,6 +437,22 @@
             transition: all 0.15s; white-space: nowrap;
         }
         .btn-pub-link:hover { background: #667eea; color: white; border-color: #667eea; }
+
+        /* ── 히스토리 날짜 그룹 헤더 ───────────────────────────── */
+        .history-date-group {
+            padding: 7px 20px 5px;
+            font-size: 10px; font-weight: 700; color: #a0aec0;
+            text-transform: uppercase; letter-spacing: 0.07em;
+            background: #f7fafc; border-bottom: 1px solid #edf2f7;
+        }
+        /* 2차 액션 버튼은 기본 숨김, hover 시 노출 */
+        .hi-secondary {
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.15s;
+        }
+        .history-item:hover .hi-secondary {
+            opacity: 1; pointer-events: auto;
+        }
 
         /* ── 토스트 ────────────────────────────────────────────── */
         #toast {
@@ -486,20 +503,20 @@
         <div class="analytics-divider"></div>
         <div class="stats-grid">
             <div class="stat-item">
-                <div class="stat-value" id="stat-total">—</div>
                 <div class="stat-label">전체 실행</div>
+                <div class="stat-value" id="stat-total">—</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value" id="stat-week">—</div>
                 <div class="stat-label">이번 주</div>
+                <div class="stat-value" id="stat-week">—</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value" id="stat-topkw" style="font-size:14px;word-break:break-all">—</div>
                 <div class="stat-label">최다 키워드</div>
+                <div class="stat-value" id="stat-topkw" style="font-size:14px;word-break:break-all">—</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value" id="stat-avg-dur">—</div>
                 <div class="stat-label">평균 소요</div>
+                <div class="stat-value" id="stat-avg-dur">—</div>
             </div>
         </div>
     </div>
@@ -535,16 +552,7 @@
 
                 <div class="placeholder" id="placeholder">
                     <div class="placeholder-icon">📊</div>
-                    <p>파이프라인을 실행하면<br>콘텐츠 결과가 여기에 표시됩니다.</p>
-                    <div class="placeholder-steps">
-                        <span class="ps-step">수집</span><span class="ps-arrow">›</span>
-                        <span class="ps-step">분석</span><span class="ps-arrow">›</span>
-                        <span class="ps-step">작성</span><span class="ps-arrow">›</span>
-                        <span class="ps-step">카드뉴스</span><span class="ps-arrow">›</span>
-                        <span class="ps-step">승인</span><span class="ps-arrow">›</span>
-                        <span class="ps-step">포스팅</span><span class="ps-arrow">›</span>
-                        <span class="ps-step">인스타그램</span>
-                    </div>
+                    <p>키워드를 입력하고 실행하면<br>콘텐츠 결과가 여기에 표시됩니다.</p>
                 </div>
 
                 <!-- 승인 배너 -->
@@ -1109,7 +1117,26 @@
             const list = document.getElementById('history-list');
             if (!jobs.length) { list.innerHTML='<div class="history-empty">실행 기록이 없습니다.</div>'; return; }
             list.innerHTML='';
-            jobs.forEach(job=>list.appendChild(buildHistoryItem(job)));
+
+            // 날짜별 그룹핑
+            const todayStr = new Date().toISOString().slice(0,10);
+            const yesterdayStr = new Date(Date.now()-86400000).toISOString().slice(0,10);
+            const groups = {};
+            const order = [];
+            jobs.forEach(job => {
+                const dateKey = (job.created_at || '').slice(0,10) || '—';
+                if (!groups[dateKey]) { groups[dateKey] = []; order.push(dateKey); }
+                groups[dateKey].push(job);
+            });
+            order.forEach(date => {
+                const header = document.createElement('div');
+                header.className = 'history-date-group';
+                if (date === todayStr)       header.textContent = '오늘';
+                else if (date === yesterdayStr) header.textContent = '어제';
+                else                         header.textContent = date;
+                list.appendChild(header);
+                groups[date].forEach(job => list.appendChild(buildHistoryItem(job)));
+            });
         }).catch(()=>{});
     }
 
@@ -1119,10 +1146,11 @@
         const LABELS = { done:'완료', running:'실행 중', error:'오류', interrupted:'중단',
                          pending_approval:'승인 대기', posting:'게시 중', rejected:'거절됨' };
         const statusLabel = LABELS[job.status] || job.status;
-        const kws       = (job.keywords||[]).join(', ') || '(지정되지 않음)';
-        const dateStr   = job.date || '';
-        const createdAt = job.created_at ? job.created_at.slice(0,16).replace('T',' ') : '';
-        const dotCls    = job.status.replace(/_/g,'');
+        const kws    = (job.keywords||[]).join(', ') || '(지정되지 않음)';
+        const dateStr = job.date || '';
+        // 날짜 그룹 헤더에서 날짜를 표시하므로 시각만 표시
+        const timeStr = job.created_at ? job.created_at.slice(11,16) : '';
+        const dotCls  = job.status.replace(/_/g,'');
 
         let durStr = '';
         if (job.duration_seconds) {
@@ -1136,27 +1164,30 @@
             errorTag = `<div class="hi-error-tag">${esc(job.error_message.slice(0,60))}</div>`;
         }
 
-        let actionsHtml = '';
+        // Primary 액션 (항상 노출)
+        let primaryHtml = '';
         if (job.status === 'done' && dateStr)
-            actionsHtml += `<button class="btn-hist" onclick="showResult('${dateStr}',${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
+            primaryHtml += `<button class="btn-hist" onclick="showResult('${dateStr}',${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
         if (job.status === 'pending_approval')
-            actionsHtml += `<button class="btn-hist approve" onclick="showApproval('${job.job_id}',${JSON.stringify(job.keywords||[])},'${dateStr}')">✓ 승인하기</button>`;
-        if (job.keywords?.length && !['running','posting'].includes(job.status))
-            actionsHtml += `<button class="hi-icon-btn rerun" title="재실행" onclick="rerunJob('${job.job_id}')">↺</button>`;
+            primaryHtml += `<button class="btn-hist approve" onclick="showApproval('${job.job_id}',${JSON.stringify(job.keywords||[])},'${dateStr}')">✓ 승인하기</button>`;
 
+        // Secondary 액션 (hover 시 노출)
+        let secondaryHtml = '';
+        if (job.keywords?.length && !['running','posting'].includes(job.status))
+            secondaryHtml += `<button class="hi-icon-btn hi-secondary" title="재실행" onclick="rerunJob('${job.job_id}')">↺</button>`;
         if (job.naver_post_url)
-            actionsHtml += `<a class="btn-pub-link" href="${esc(job.naver_post_url)}" target="_blank" rel="noopener">📝 블로그</a>`;
+            secondaryHtml += `<a class="btn-pub-link hi-secondary" href="${esc(job.naver_post_url)}" target="_blank" rel="noopener" title="네이버 블로그 보기">📝</a>`;
         if (job.instagram_permalink)
-            actionsHtml += `<a class="btn-pub-link" href="${esc(job.instagram_permalink)}" target="_blank" rel="noopener">📸 인스타</a>`;
+            secondaryHtml += `<a class="btn-pub-link hi-secondary" href="${esc(job.instagram_permalink)}" target="_blank" rel="noopener" title="인스타그램 보기">📸</a>`;
 
         item.innerHTML = `
             <div class="hi-dot ${dotCls}"></div>
             <div class="hi-info">
                 <div class="hi-kw">${esc(kws)}</div>
-                <div class="hi-meta">${statusLabel}${dateStr?' · '+dateStr:''} · ${createdAt}${durStr}</div>
+                <div class="hi-meta">${statusLabel} · ${timeStr}${durStr}</div>
                 ${errorTag}
             </div>
-            <div class="hi-actions">${actionsHtml}</div>`;
+            <div class="hi-actions">${primaryHtml}${secondaryHtml}</div>`;
         return item;
     }
 
@@ -1259,6 +1290,7 @@
                     data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] },
                     options: {
                         responsive: false,
+                        rotation: -90, // 완료(초록) 세그먼트가 12시 방향부터 시작
                         plugins: { legend: { display: false }, tooltip: { callbacks: {
                             label: c => ` ${c.label}: ${c.parsed}`
                         }}},
