@@ -235,7 +235,6 @@ def stream(job_id: str):
             today = db_job.get("date") or date.today().isoformat()
             keywords = db_job.get("keywords", [])
             q = queue.Queue()
-            q.put(f"PENDING:{today}")
             jobs[job_id] = {"status": "pending_approval", "queue": q,
                             "date": today, "keywords": keywords, "last_step": None}
         else:
