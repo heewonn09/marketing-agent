@@ -1,3 +1,7 @@
+import json
+import urllib.error
+
+from agents.analyzer import main as analyzer
 from agents.analyzer.main import count_keywords
 
 
@@ -28,3 +32,46 @@ def test_count_keywords_english_min_length():
 
 def test_count_keywords_empty_posts():
     assert count_keywords([]) == []
+
+
+# ── fetch_search_trends: 실패(degraded)와 빈 결과(정상) 구분 ──────────────
+class _FakeResp:
+    def __init__(self, payload):
+        self._b = json.dumps(payload).encode("utf-8")
+
+    def read(self):
+        return self._b
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_fetch_search_trends_empty_keywords_is_ok():
+    trends, ok = analyzer.fetch_search_trends([], "id", "sec")
+    assert trends == []
+    assert ok is True
+
+
+def test_fetch_search_trends_success(monkeypatch):
+    payload = {"results": [{"title": "AI", "data": [{"ratio": 10}, {"ratio": 20}]}]}
+    monkeypatch.setattr(
+        analyzer.urllib.request, "urlopen", lambda req: _FakeResp(payload)
+    )
+    trends, ok = analyzer.fetch_search_trends(["AI"], "id", "sec")
+    assert ok is True
+    assert trends[0]["keyword"] == "AI"
+    assert trends[0]["trend"] == [10, 20]
+    assert trends[0]["change_rate"] == "+100%"
+
+
+def test_fetch_search_trends_http_error_is_degraded(monkeypatch):
+    def boom(req):
+        raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {}, None)
+
+    monkeypatch.setattr(analyzer.urllib.request, "urlopen", boom)
+    trends, ok = analyzer.fetch_search_trends(["AI"], "id", "sec")
+    assert trends == []
+    assert ok is False  # 실패는 빈 결과와 구분되어야 한다

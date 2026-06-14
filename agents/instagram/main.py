@@ -13,6 +13,12 @@ from dotenv import load_dotenv
 import sys as _sys
 _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from utils.gemini_retry import gemini_retry
+from utils.logging_setup import get_logger
+
+log = get_logger(
+    "instagram",
+    log_file=Path(__file__).resolve().parent.parent.parent / "logs" / f"instagram_{datetime.now():%Y-%m-%d}.log",
+)
 
 # Windows cp949 콘솔에서 이모지 등 비cp949 문자 출력 오류 방지
 if sys.stdout and hasattr(sys.stdout, 'buffer'):
@@ -153,10 +159,16 @@ def _check_url_accessible(url: str) -> bool:
 
 
 def _pick_accessible_fallback() -> str:
-    """DEFAULT_IMAGE_URL → LAST_RESORT_URL 순서로 접근 가능한 폴백 반환."""
+    """DEFAULT_IMAGE_URL → LAST_RESORT_URL 순서로 접근 가능한 폴백 반환.
+
+    키워드 관련 이미지(카드뉴스/Unsplash)를 얻지 못해 일반 플레이스홀더로
+    대체되는 품질 저하 상황이므로 WARNING 으로 영속 기록한다.
+    """
     if DEFAULT_IMAGE_URL != LAST_RESORT_URL and _check_url_accessible(DEFAULT_IMAGE_URL):
+        log.warning("키워드 이미지 확보 실패 — 기본 폴백 이미지 사용: %s", DEFAULT_IMAGE_URL)
         _print(f"[image] 폴백 이미지 사용: {DEFAULT_IMAGE_URL}")
         return DEFAULT_IMAGE_URL
+    log.warning("키워드 이미지 확보 실패 — 최종 폴백 이미지 사용: %s", LAST_RESORT_URL)
     _print(f"[image] 최종 폴백 사용: {LAST_RESORT_URL}")
     return LAST_RESORT_URL
 

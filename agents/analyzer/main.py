@@ -19,6 +19,12 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 import sys as _sys
 _sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from utils.gemini_retry import gemini_retry
+from utils.logging_setup import get_logger
+
+log = get_logger(
+    "analyzer",
+    log_file=Path(__file__).parent.parent.parent / "logs" / f"analyzer_{datetime.now():%Y-%m-%d}.log",
+)
 
 _STOP_WORDS = {
     "이", "그", "저", "의", "을", "를", "가", "은", "는", "에", "와", "과",
@@ -108,9 +114,16 @@ ANALYSIS_PROMPT = """다음은 "{keyword}" 키워드로 수집한 네이버 블�
 - 반드시 유효한 JSON만 반환하고, 다른 텍스트는 포함하지 마세요"""
 
 
-def fetch_search_trends(keywords: list[str], client_id: str, client_secret: str) -> list[dict]:
+def fetch_search_trends(
+    keywords: list[str], client_id: str, client_secret: str
+) -> tuple[list[dict], bool]:
+    """검색량 트렌드를 수집한다.
+
+    Returns (trends, ok). ok=False 는 API 실패를 의미하며, 호출측에서
+    빈 결과(정상)와 실패(degraded)를 구분할 수 있게 한다.
+    """
     if not keywords:
-        return []
+        return [], True
     today = datetime.now()
     # 현재 진행 중인 주는 부분 집계라 변화율이 왜곡됨 → 지난 주 일요일 기준으로 완전한 4주만 수집
     days_since_sunday = (today.weekday() + 1) % 7
@@ -141,11 +154,13 @@ def fetch_search_trends(keywords: list[str], client_id: str, client_secret: str)
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        print(f"네이버 데이터랩 API 오류: {e.code} {e.reason}")
-        return []
+        log.warning("데이터랩 API 오류로 검색량 트렌드 누락: %s %s (키워드: %s)",
+                    e.code, e.reason, keywords[:5])
+        return [], False
     except Exception as e:
-        print(f"네이버 데이터랩 API 연결 오류: {e}")
-        return []
+        log.warning("데이터랩 API 연결 오류로 검색량 트렌드 누락: %s (키워드: %s)",
+                    e, keywords[:5])
+        return [], False
 
     trends = []
     for result in data.get("results", []):
@@ -163,7 +178,7 @@ def fetch_search_trends(keywords: list[str], client_id: str, client_secret: str)
             "trend": values,
             "change_rate": change_rate,
         })
-    return trends
+    return trends, True
 
 
 def load_history(data_dir: Path) -> dict:
@@ -325,7 +340,7 @@ def analyze_keyword(keyword: str, client, naver_id: str, naver_secret: str, data
             fut_gemini = pool.submit(analyze_with_gemini, keyword, posts, client)
             fut_verify = pool.submit(fetch_search_trends, prev_recommended[:5], naver_id, naver_secret)
             analysis = fut_gemini.result()
-            verify_current_trends = fut_verify.result()
+            verify_current_trends, _ = fut_verify.result()
     else:
         analysis = analyze_with_gemini(keyword, posts, client)
         verify_current_trends = []
@@ -350,16 +365,21 @@ def analyze_keyword(keyword: str, client, naver_id: str, naver_secret: str, data
 
     search_trends: list[dict] = []
     next_week_snapshot_data: list[dict] = []
+    search_trends_degraded = False
     if naver_id and naver_secret:
         print(f"{tag} 데이터랩 트렌드 수집 중...", flush=True)
         with ThreadPoolExecutor(max_workers=2) as pool:
             fut_a = pool.submit(fetch_search_trends, [keyword] + interest_kws, naver_id, naver_secret)
             fut_b = pool.submit(fetch_search_trends, next_week_kw_names, naver_id, naver_secret)
-            search_trends = fut_a.result()
-            next_week_snapshot_data = fut_b.result()
+            search_trends, ok_a = fut_a.result()
+            next_week_snapshot_data, ok_b = fut_b.result()
+        search_trends_degraded = not (ok_a and ok_b)
+        if search_trends_degraded:
+            log.warning("%s 데이터랩 일부/전체 실패 — 검색량 트렌드가 불완전합니다", tag)
         print(f"{tag} 데이터랩 완료 ({len(search_trends)}개 키워드)")
     else:
-        print(f"{tag} 경고: NAVER_CLIENT_ID/SECRET 미설정, 검색량 트렌드 생략")
+        search_trends_degraded = True
+        log.warning("%s NAVER_CLIENT_ID/SECRET 미설정 — 검색량 트렌드 생략(degraded)", tag)
 
     # 히스토리 업데이트: 오늘의 추천 키워드 + DataLab 스냅샷 저장
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -406,6 +426,7 @@ def analyze_keyword(keyword: str, client, naver_id: str, naver_secret: str, data
         "target_audience": analysis.get("target_audience", {}),
         "next_week_keywords": analysis.get("next_week_keywords", []),
         "search_trends": search_trends,
+        "search_trends_degraded": search_trends_degraded,
         "prediction_verification": prediction_verification,
     }
 
