@@ -35,14 +35,16 @@ def upsert_job(
     now = datetime.now().isoformat()
     with sqlite3.connect(path) as conn:
         existing = conn.execute(
-            "SELECT created_at FROM jobs WHERE job_id = ?", (job_id,)
+            "SELECT created_at, keywords, date FROM jobs WHERE job_id = ?", (job_id,)
         ).fetchone()
-        created_at = existing[0] if existing else now
+        created_at     = existing[0] if existing else now
+        final_keywords = json.dumps(keywords) if keywords is not None else (existing[1] if existing else "[]")
+        final_date     = date if date is not None else (existing[2] if existing else None)
         conn.execute(
             """INSERT OR REPLACE INTO jobs
                (job_id, status, keywords, date, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (job_id, status, json.dumps(keywords or []), date, created_at, now),
+            (job_id, status, final_keywords, final_date, created_at, now),
         )
 
 
