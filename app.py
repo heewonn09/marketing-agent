@@ -6,6 +6,7 @@ import re as _re
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from datetime import date
 from pathlib import Path
@@ -19,7 +20,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 load_dotenv(Path(__file__).parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).parent))
-from utils.job_store import init_db, upsert_job, get_job, list_jobs
+from utils.job_store import init_db, upsert_job, get_job, list_jobs, get_stats
 from utils.cleanup import cleanup_old_files
 from utils.notifier import notify_done, notify_error
 from utils.auth_guard import verify_credentials, LoginRateLimiter
@@ -155,8 +156,21 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
         )
         for line in proc.stdout:
             line = line.rstrip()
-            if line:
-                q.put(f"LOG:{line}")
+            if not line:
+                continue
+            # 에이전트 결과 메타데이터 파싱 (로그로 노출하지 않음)
+            if line.startswith("[RESULT_URL]:"):
+                jobs[job_id]["naver_post_url"] = line[13:].strip()
+                continue
+            if line.startswith("[RESULT_MEDIA]:"):
+                parts = line[15:].strip().split(":", 1)
+                if len(parts) == 2:
+                    jobs[job_id]["instagram_media_id"] = parts[0]
+                    jobs[job_id]["instagram_permalink"] = parts[1]
+                elif len(parts) == 1:
+                    jobs[job_id]["instagram_media_id"] = parts[0]
+                continue
+            q.put(f"LOG:{line}")
         proc.wait()
         if proc.returncode != 0:
             err_msg = f"{name} 실패 (종료 코드: {proc.returncode})"
@@ -206,23 +220,50 @@ def _run_pipeline_part2(job_id: str, keywords: list[str], today: str) -> None:
 
     jobs[job_id]["status"] = "done"
     jobs[job_id]["date"] = today
-    upsert_job(job_id, "done", keywords, today)
+    duration = int(time.time() - jobs[job_id].get("started_at", time.time()))
+    jobs[job_id]["duration_seconds"] = duration
+    upsert_job(
+        job_id, "done", keywords, today,
+        naver_post_url=jobs[job_id].get("naver_post_url"),
+        instagram_media_id=jobs[job_id].get("instagram_media_id"),
+        instagram_permalink=jobs[job_id].get("instagram_permalink"),
+        duration_seconds=duration,
+    )
     jobs[job_id]["queue"].put(f"DONE:{today}")
     base_url = os.environ.get("CARDNEWS_BASE_URL", "")
     threading.Thread(target=notify_done, args=(keywords, today, base_url), daemon=True).start()
 
 
+def _run_per_keyword(job_id: str, keyword: str) -> bool:
+    """키워드 하나의 수집→분석→작성을 순차 실행. 실패 시 False 반환."""
+    for name, script, args in [
+        (f"수집 [{keyword}]", "agents/collector/main.py", ["--keyword", keyword]),
+        (f"분석 [{keyword}]", "agents/analyzer/main.py",  ["--keyword", keyword]),
+        (f"작성 [{keyword}]", "agents/writer/main.py",    ["--keyword", keyword]),
+    ]:
+        if not _run_cmd(job_id, name, script, args):
+            return False
+    return True
+
+
 def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False) -> None:
+    import concurrent.futures
     today = date.today().isoformat()
 
-    for keyword in keywords:
-        for name, script, step_args in [
-            (f"수집 [{keyword}]", "agents/collector/main.py", ["--keyword", keyword]),
-            (f"분석 [{keyword}]", "agents/analyzer/main.py",  ["--keyword", keyword]),
-            (f"작성 [{keyword}]", "agents/writer/main.py",    ["--keyword", keyword]),
-        ]:
-            if not _run_cmd(job_id, name, script, step_args):
-                return
+    if len(keywords) == 1:
+        # 단일 키워드: 직접 실행
+        if not _run_per_keyword(job_id, keywords[0]):
+            return
+    else:
+        # 복수 키워드: 키워드별 수집/분석/작성을 최대 3개 병렬로
+        failed = threading.Event()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(keywords), 3)) as ex:
+            futures = {ex.submit(_run_per_keyword, job_id, kw): kw for kw in keywords}
+            for fut in concurrent.futures.as_completed(futures):
+                if not fut.result():
+                    failed.set()
+        if failed.is_set():
+            return
 
     for name, script, step_args in [
         ("리포트 [통합]", "agents/reporter/main.py", ["--date", today]),
@@ -271,8 +312,12 @@ def run():
         return jsonify({"error": "키워드를 입력하세요"}), 400
 
     job_id = uuid.uuid4().hex[:8]
-    jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None,
-                    "keywords": keywords, "last_step": None}
+    jobs[job_id] = {
+        "status": "running", "queue": queue.Queue(), "date": None,
+        "keywords": keywords, "last_step": None,
+        "started_at": time.time(),
+        "naver_post_url": None, "instagram_media_id": None, "instagram_permalink": None,
+    }
     upsert_job(job_id, "running", keywords)
     threading.Thread(target=run_pipeline, args=(job_id, keywords), daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -394,6 +439,11 @@ def history():
     return jsonify(list_jobs(limit=20))
 
 
+@app.route("/stats")
+def stats():
+    return jsonify(get_stats())
+
+
 @app.route("/rerun/<job_id>", methods=["POST"])
 def rerun(job_id: str):
     job = get_job(job_id)
@@ -403,8 +453,12 @@ def rerun(job_id: str):
     if not keywords:
         return jsonify({"error": "키워드 정보가 없습니다"}), 400
     new_id = uuid.uuid4().hex[:8]
-    jobs[new_id] = {"status": "running", "queue": queue.Queue(), "date": None,
-                    "keywords": keywords, "last_step": None}
+    jobs[new_id] = {
+        "status": "running", "queue": queue.Queue(), "date": None,
+        "keywords": keywords, "last_step": None,
+        "started_at": time.time(),
+        "naver_post_url": None, "instagram_media_id": None, "instagram_permalink": None,
+    }
     upsert_job(new_id, "running", keywords)
     threading.Thread(target=run_pipeline, args=(new_id, keywords), daemon=True).start()
     return jsonify({"job_id": new_id, "keywords": keywords})
@@ -455,8 +509,12 @@ def scheduled_run():
         return
     print(f"[scheduler] 자동 실행 시작: {keywords}")
     job_id = uuid.uuid4().hex[:8]
-    jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None,
-                    "keywords": keywords, "last_step": None}
+    jobs[job_id] = {
+        "status": "running", "queue": queue.Queue(), "date": None,
+        "keywords": keywords, "last_step": None,
+        "started_at": time.time(),
+        "naver_post_url": None, "instagram_media_id": None, "instagram_permalink": None,
+    }
     upsert_job(job_id, "running", keywords)
     # 스케줄러는 승인 없이 자동 게시
     threading.Thread(target=run_pipeline, args=(job_id, keywords, True), daemon=True).start()

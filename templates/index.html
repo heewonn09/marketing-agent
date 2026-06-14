@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>마케팅 자동화 시스템</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -334,6 +335,78 @@
         .btn-hist.approve { background: #fef3c7; border-color: #f6c90e; color: #78350f; font-weight: 700; }
         .btn-hist.approve:hover { background: #f59e0b; border-color: #f59e0b; color: white; }
 
+        /* ── 통계 바 ───────────────────────────────────────────── */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 700px) { .stats-bar { grid-template-columns: repeat(2, 1fr); } }
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 14px 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #2d3748;
+            line-height: 1.2;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #a0aec0;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .stat-badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+        .stat-badge.green { background: #f0fff4; color: #276749; }
+        .stat-badge.blue  { background: #ebf4ff; color: #2b6cb0; }
+
+        /* ── 애널리틱스 패널 ────────────────────────────────────── */
+        .analytics-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            padding: 18px 20px;
+            margin-bottom: 14px;
+        }
+        .analytics-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .analytics-title { font-size: 11px; font-weight: 700; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.06em; }
+        .analytics-chart-wrap { display: flex; gap: 20px; align-items: center; }
+        .analytics-donut { width: 110px; height: 110px; flex-shrink: 0; }
+        .analytics-legend { display: flex; flex-direction: column; gap: 6px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4a5568; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ── 발행 링크 배지 ─────────────────────────────────────── */
+        .btn-pub-link {
+            display: inline-flex; align-items: center; gap: 3px;
+            padding: 3px 9px;
+            border: 1px solid #e2e8f0; border-radius: 5px;
+            font-size: 11px; font-weight: 600;
+            background: white; color: #4a5568;
+            text-decoration: none;
+            transition: all 0.15s; white-space: nowrap;
+        }
+        .btn-pub-link:hover { background: #667eea; color: white; border-color: #667eea; }
+
         /* ── 토스트 ────────────────────────────────────────────── */
         #toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -358,6 +431,39 @@
         </div>
         <a href="/logout" class="btn-logout">로그아웃</a>
     </header>
+
+    <!-- 통계 바 -->
+    <div class="stats-bar" id="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-total">—</div>
+            <div class="stat-label">전체 실행</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-rate">—</div>
+            <div class="stat-label">성공률</div>
+            <span class="stat-badge green" id="stat-done-count" style="display:none"></span>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-week">—</div>
+            <div class="stat-label">이번 주 실행</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="stat-topkw" style="font-size:14px;word-break:break-all">—</div>
+            <div class="stat-label">최다 키워드</div>
+            <span class="stat-badge blue" id="stat-avg-dur" style="display:none"></span>
+        </div>
+    </div>
+
+    <!-- 애널리틱스 -->
+    <div class="analytics-section" id="analytics-section" style="display:none">
+        <div class="analytics-header">
+            <span class="analytics-title">실행 현황 분석</span>
+        </div>
+        <div class="analytics-chart-wrap">
+            <canvas class="analytics-donut" id="status-chart"></canvas>
+            <div class="analytics-legend" id="chart-legend"></div>
+        </div>
+    </div>
 
     <div class="layout">
 
@@ -969,6 +1075,14 @@
         const createdAt = job.created_at ? job.created_at.slice(0,16).replace('T',' ') : '';
         const dotCls    = job.status.replace(/_/g,'');
 
+        // 실행 시간 표시
+        let durStr = '';
+        if (job.duration_seconds) {
+            const m = Math.floor(job.duration_seconds / 60);
+            const s = job.duration_seconds % 60;
+            durStr = ` · ${m}분 ${s}초`;
+        }
+
         let actionsHtml = '';
         if (job.status === 'done' && dateStr)
             actionsHtml += `<button class="btn-hist" onclick="showResult('${dateStr}',${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
@@ -977,11 +1091,17 @@
         if (job.keywords?.length && !['running','posting'].includes(job.status))
             actionsHtml += `<button class="btn-hist rerun" onclick="rerunJob('${job.job_id}')">재실행</button>`;
 
+        // 발행 결과 링크
+        if (job.naver_post_url)
+            actionsHtml += `<a class="btn-pub-link" href="${esc(job.naver_post_url)}" target="_blank" rel="noopener">📝 블로그</a>`;
+        if (job.instagram_permalink)
+            actionsHtml += `<a class="btn-pub-link" href="${esc(job.instagram_permalink)}" target="_blank" rel="noopener">📸 인스타</a>`;
+
         item.innerHTML = `
             <div class="hi-dot ${dotCls}"></div>
             <div class="hi-info">
                 <div class="hi-kw">${esc(kws)}</div>
-                <div class="hi-meta">${statusLabel}${dateStr?' · '+dateStr:''} · ${createdAt}</div>
+                <div class="hi-meta">${statusLabel}${dateStr?' · '+dateStr:''} · ${createdAt}${durStr}</div>
             </div>
             <div class="hi-actions">${actionsHtml}</div>`;
         return item;
@@ -1045,7 +1165,63 @@
         if(e.key==='Enter') startPipeline();
     });
 
+    // ── 통계 로드 ────────────────────────────────────────────
+    let _statusChart = null;
+
+    function loadStats() {
+        fetch('/stats').then(r => r.json()).then(s => {
+            document.getElementById('stat-total').textContent = s.total ?? '—';
+            document.getElementById('stat-rate').textContent  = s.total ? s.success_rate + '%' : '—';
+            document.getElementById('stat-week').textContent  = s.week_jobs ?? '—';
+            document.getElementById('stat-topkw').textContent = s.top_keyword || '—';
+
+            if (s.done > 0) {
+                const dc = document.getElementById('stat-done-count');
+                dc.textContent = `✓ ${s.done}건 성공`;
+                dc.style.display = 'inline-block';
+            }
+            if (s.avg_duration_seconds) {
+                const ad = document.getElementById('stat-avg-dur');
+                const m = Math.floor(s.avg_duration_seconds / 60);
+                const sec = s.avg_duration_seconds % 60;
+                ad.textContent = `평균 ${m}분 ${sec}초`;
+                ad.style.display = 'inline-block';
+            }
+
+            // 도넛 차트
+            if (s.total > 0) {
+                document.getElementById('analytics-section').style.display = 'block';
+                const pending = s.total - s.done - s.error;
+                const data = [s.done, s.error, pending < 0 ? 0 : pending];
+                const labels = ['완료', '오류', '기타'];
+                const colors = ['#38a169', '#e53e3e', '#a0aec0'];
+
+                const legend = document.getElementById('chart-legend');
+                legend.innerHTML = '';
+                labels.forEach((l, i) => {
+                    if (!data[i]) return;
+                    legend.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${colors[i]}"></div>${l}: <strong>${data[i]}</strong></div>`;
+                });
+
+                const ctx = document.getElementById('status-chart').getContext('2d');
+                if (_statusChart) _statusChart.destroy();
+                _statusChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false }, tooltip: { callbacks: {
+                            label: ctx => ` ${ctx.label}: ${ctx.parsed}`
+                        }}},
+                        cutout: '68%',
+                    }
+                });
+            }
+        }).catch(() => {});
+    }
+
     loadHistory();
+    loadStats();
 </script>
 </body>
 </html>

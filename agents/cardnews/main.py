@@ -22,13 +22,17 @@ C_GRAD_TOP    = (102, 126, 234)   # #667eea
 C_GRAD_BTM    = (118,  75, 162)   # #764ba2
 C_PURPLE      = (118,  75, 162)
 C_PURPLE_MID  = ( 80,  50, 140)
+C_PURPLE_DEEP = ( 50,  30, 110)
 C_PURPLE_LITE = (240, 235, 255)   # 연보라 배경
 C_PURPLE_CARD = (250, 248, 255)
 C_WHITE       = (255, 255, 255)
 C_DARK        = ( 30,  20,  60)
 C_MID         = ( 90,  70, 130)
 C_ACCENT_LITE = (220, 200, 255)
+C_ACCENT_GOLD = (255, 220, 100)   # 강조 골드
+C_GREEN_LT    = (160, 230, 140)   # 체크 아이콘
 C_DIVIDER     = (220, 215, 240)
+C_SHADOW      = (200, 195, 220)   # 카드 그림자 시뮬레이션
 
 SIZE   = 1080
 MARGIN = 72
@@ -100,6 +104,19 @@ def _gradient_bg(img: Image.Image, c1: tuple, c2: tuple) -> None:
         draw.line([(0, y), (img.width, y)], fill=(r, g, b))
 
 
+def _shadow_rect(draw: ImageDraw.ImageDraw, xy: list, radius: int = 14,
+                 shadow_offset: int = 5, shadow_alpha: int = 40) -> None:
+    """그림자가 있는 둥근 사각형. offset만큼 오프셋된 어두운 레이어를 먼저 그린다."""
+    sx0, sy0, sx1, sy1 = xy[0] + shadow_offset, xy[1] + shadow_offset, xy[2] + shadow_offset, xy[3] + shadow_offset
+    draw.rounded_rectangle([sx0, sy0, sx1, sy1], radius=radius, fill=C_SHADOW)
+
+
+def _accent_bar(draw: ImageDraw.ImageDraw, x: int, y0: int, y1: int,
+                color: tuple, width: int = 6, radius: int = 3) -> None:
+    """카드 왼쪽 수직 강조 바."""
+    draw.rounded_rectangle([x, y0, x + width, y1], radius=radius, fill=color)
+
+
 def _wrap(text: str, font: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
     """한국어 포함 텍스트를 max_w px 이내로 줄바꿈."""
     dummy_draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
@@ -153,8 +170,17 @@ def make_slide1(data: dict) -> Image.Image:
             arrow = "↑" if cr.startswith("+") else "↓"
             change_rate = f"검색량 {cr} {arrow}"
 
-    # 상단 레이블
-    draw.text((MARGIN, MARGIN), "마케팅 인사이트", font=_find_font(32), fill=C_ACCENT_LITE)
+    # 배경 장식 원 (우측 상단)
+    draw.ellipse([SIZE - 220, -100, SIZE + 80, 200], fill=C_PURPLE_MID)
+    draw.ellipse([SIZE - 160, -60,  SIZE + 40, 160], fill=C_PURPLE_DEEP)
+
+    # 상단 레이블 (태그 배지 스타일)
+    tag_font = _find_font(28)
+    tag_text = "마케팅 인사이트"
+    tw = int(draw.textlength(tag_text, font=tag_font))
+    draw.rounded_rectangle([MARGIN - 4, MARGIN - 6, MARGIN + tw + 16, MARGIN + 38],
+                            radius=8, fill=(255, 255, 255, 30))
+    draw.text((MARGIN + 6, MARGIN), tag_text, font=tag_font, fill=C_ACCENT_LITE)
 
     # 키워드 (큰 텍스트, 줄바꿈)
     kw_font = _find_font(76, bold=True)
@@ -190,22 +216,27 @@ def make_slide1(data: dict) -> Image.Image:
     interest_level = max(int_counts, key=int_counts.get) if any(int_counts.values()) else "중간"
     competition_level = data.get("competition_saturation", {}).get("level", "미확인")
 
-    panel_h = 128
+    panel_h = 138
+    # 패널 그림자 + 배경
+    _shadow_rect(draw, [MARGIN, y, SIZE - MARGIN, y + panel_h], radius=20, shadow_offset=5)
     draw.rounded_rectangle([MARGIN, y, SIZE - MARGIN, y + panel_h],
-                            radius=18, fill=(80, 50, 140))
+                            radius=20, fill=C_PURPLE_DEEP)
+    # 패널 내 하이라이트 선
+    draw.line([(MARGIN + 20, y + 1), (SIZE - MARGIN - 20, y + 1)],
+              fill=(180, 160, 240), width=1)
 
     stats = [("관심도", interest_level), ("경쟁강도", competition_level), ("긍정반응", f"{positive_pct}%")]
     label_font = _find_font(24)
-    val_font = _find_font(36, bold=True)
+    val_font = _find_font(38, bold=True)
     col_w = (SIZE - MARGIN * 2) // 3
     for si, (label, value) in enumerate(stats):
         col_x = MARGIN + col_w * si
         lw = int(draw.textlength(label, font=label_font))
-        draw.text((col_x + (col_w - lw) // 2, y + 18), label, font=label_font, fill=C_ACCENT_LITE)
+        draw.text((col_x + (col_w - lw) // 2, y + 20), label, font=label_font, fill=C_ACCENT_LITE)
         vw = int(draw.textlength(value, font=val_font))
-        draw.text((col_x + (col_w - vw) // 2, y + 54), value, font=val_font, fill=C_WHITE)
+        draw.text((col_x + (col_w - vw) // 2, y + 56), value, font=val_font, fill=C_WHITE)
         if si < 2:
-            draw.line([(col_x + col_w, y + 20), (col_x + col_w, y + panel_h - 20)],
+            draw.line([(col_x + col_w, y + 22), (col_x + col_w, y + panel_h - 22)],
                       fill=(150, 120, 200), width=1)
 
     y += panel_h + 36
@@ -254,11 +285,13 @@ def make_slide1(data: dict) -> Image.Image:
 # ── 슬라이드 2: 트렌드 TOP 3 ─────────────────────────────────────────────────
 def make_slide2(data: dict) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), C_WHITE)
-    draw = ImageDraw.Draw(img)
 
-    # 헤더 바
-    draw.rectangle([0, 0, SIZE, 138], fill=C_PURPLE)
-    _draw_centered(draw, 42, "이번 주 트렌드 TOP 3", _find_font(52, bold=True), C_WHITE)
+    # 헤더 그라데이션 바
+    hdr = Image.new("RGB", (SIZE, 148))
+    _gradient_bg(hdr, C_GRAD_TOP, C_GRAD_BTM)
+    img.paste(hdr, (0, 0))
+    draw = ImageDraw.Draw(img)
+    _draw_centered(draw, 44, "이번 주 트렌드 TOP 3", _find_font(52, bold=True), C_WHITE)
 
     trends = data.get("trends", [])[:3]
     num_font   = _find_font(38, bold=True)
@@ -266,19 +299,23 @@ def make_slide2(data: dict) -> Image.Image:
     desc_font  = _find_font(26)
     brand_font = _find_font(26)
 
-    card_h = 228
-    gap = 18
-    card_starts = [152, 152 + card_h + gap, 152 + (card_h + gap) * 2]
+    card_h = 224
+    gap = 16
+    card_starts = [162, 162 + card_h + gap, 162 + (card_h + gap) * 2]
 
     for i, trend in enumerate(trends):
         y0 = card_starts[i]
 
-        # 카드 배경
+        # 카드 그림자 + 배경
+        _shadow_rect(draw, [MARGIN, y0, SIZE - MARGIN, y0 + card_h], radius=16, shadow_offset=4)
         draw.rounded_rectangle([MARGIN, y0, SIZE - MARGIN, y0 + card_h],
-                                radius=14, fill=C_PURPLE_CARD, outline=C_DIVIDER, width=1)
+                                radius=16, fill=C_PURPLE_CARD, outline=C_DIVIDER, width=1)
+        # 왼쪽 강조 바
+        _accent_bar(draw, MARGIN, y0, y0 + card_h, C_PURPLE, width=7, radius=4)
 
-        # 번호 원
-        cx, cy, cr = MARGIN + 46, y0 + 40, 32
+        # 번호 원 (골드 테두리)
+        cx, cy, cr = MARGIN + 54, y0 + 44, 34
+        draw.ellipse([cx - cr - 3, cy - cr - 3, cx + cr + 3, cy + cr + 3], fill=C_ACCENT_GOLD)
         draw.ellipse([cx - cr, cy - cr, cx + cr, cy + cr], fill=C_PURPLE)
         num_str = str(i + 1)
         nw = int(draw.textlength(num_str, font=num_font))
@@ -290,15 +327,15 @@ def make_slide2(data: dict) -> Image.Image:
         else:
             title_raw = trend[:40]
 
-        tx = MARGIN + 96
+        tx = MARGIN + 106
         title_lines = _wrap(title_raw, title_font, SIZE - tx - MARGIN - 12)[:2]
-        ty = y0 + 14
+        ty = y0 + 16
         for line in title_lines:
             draw.text((tx, ty), line, font=title_font, fill=C_DARK)
             ty += 38
 
         # 카드 내 구분선
-        draw.line([(MARGIN + 16, ty + 6), (SIZE - MARGIN - 16, ty + 6)],
+        draw.line([(MARGIN + 20, ty + 8), (SIZE - MARGIN - 20, ty + 8)],
                   fill=C_DIVIDER, width=1)
 
         # 설명: 원본 텍스트 최대 3줄 (Gemini 요약 없이 자연스럽게 wrap)
@@ -307,9 +344,9 @@ def make_slide2(data: dict) -> Image.Image:
         else:
             desc_raw = trend
         desc_lines = _wrap(desc_raw, desc_font, SIZE - MARGIN * 2 - 40)[:3]
-        dy = ty + 18
+        dy = ty + 22
         for line in desc_lines:
-            draw.text((MARGIN + 24, dy), line, font=desc_font, fill=C_MID)
+            draw.text((MARGIN + 26, dy), line, font=desc_font, fill=C_MID)
             dy += 34
 
     # 브랜드
@@ -323,49 +360,61 @@ def make_slide3(data: dict) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), C_PURPLE_LITE)
     draw = ImageDraw.Draw(img)
 
-    # 헤더 바
-    draw.rectangle([0, 0, SIZE, 138], fill=C_PURPLE)
-    _draw_centered(draw, 42, "다음 주 공략 키워드", _find_font(52, bold=True), C_WHITE)
+    # 배경 장식 원 (좌하단)
+    draw.ellipse([-80, SIZE - 200, 200, SIZE + 80], fill=(200, 190, 240))
+
+    # 헤더 그라데이션 바
+    hdr = Image.new("RGB", (SIZE, 148))
+    _gradient_bg(hdr, C_GRAD_TOP, C_GRAD_BTM)
+    img.paste(hdr, (0, 0))
+    draw = ImageDraw.Draw(img)
+    _draw_centered(draw, 44, "다음 주 공략 키워드", _find_font(52, bold=True), C_WHITE)
 
     next_kws = data.get("next_week_keywords", [])[:3]
     kw_font     = _find_font(38, bold=True)
     reason_font = _find_font(26)
-    num_font    = _find_font(28, bold=True)
+    num_font    = _find_font(30, bold=True)
     card_colors = [C_PURPLE, C_PURPLE_MID, (140, 100, 200)]
 
-    card_y_starts = [176, 416, 656]
-    card_h = 196
+    card_y_starts = [180, 416, 652]
+    card_h = 200
 
     for i, item in enumerate(next_kws):
         kw     = item.get("keyword", "") if isinstance(item, dict) else item
         reason = item.get("reason", "")   if isinstance(item, dict) else ""
 
         cy = card_y_starts[i]
-        # 카드 배경
+        # 카드 그림자 + 배경
+        _shadow_rect(draw, [MARGIN, cy, SIZE - MARGIN, cy + card_h], radius=18, shadow_offset=4)
         draw.rounded_rectangle([MARGIN, cy, SIZE - MARGIN, cy + card_h],
                                 radius=18, fill=C_WHITE)
-        # 왼쪽 컬러 바
-        draw.rounded_rectangle([MARGIN, cy, MARGIN + 8, cy + card_h],
-                                radius=4, fill=card_colors[i])
+        # 왼쪽 강조 바 (두껍게)
+        _accent_bar(draw, MARGIN, cy, cy + card_h, card_colors[i], width=10, radius=5)
 
-        # 번호
-        num_str = f"0{i + 1}"
-        draw.text((MARGIN + 22, cy + 20), num_str,
-                  font=num_font, fill=card_colors[i])
+        # 번호 배지 (색상 원)
+        nc = MARGIN + 34
+        draw.ellipse([nc - 20, cy + 18, nc + 20, cy + 58], fill=card_colors[i])
+        num_str = str(i + 1)
+        nw = int(draw.textlength(num_str, font=num_font))
+        draw.text((nc - nw // 2, cy + 22), num_str, font=num_font, fill=C_WHITE)
 
         # 키워드
-        kw_lines = _wrap(kw, kw_font, SIZE - MARGIN * 2 - 60)[:2]
-        ky = cy + 56
+        kw_lines = _wrap(kw, kw_font, SIZE - MARGIN * 2 - 80)[:2]
+        ky = cy + 20
         for line in kw_lines:
-            draw.text((MARGIN + 22, ky), line, font=kw_font, fill=C_DARK)
+            draw.text((MARGIN + 68, ky), line, font=kw_font, fill=C_DARK)
             ky += 48
 
-        # 이유: wrap으로 최대 2줄 표시 (34자 하드컷 제거)
+        # 구분선
+        draw.line([(MARGIN + 68, ky + 2), (SIZE - MARGIN - 20, ky + 2)],
+                  fill=C_DIVIDER, width=1)
+
+        # 이유
         if reason:
-            reason_lines = _wrap(reason, reason_font, SIZE - MARGIN * 2 - 60)[:2]
-            ry = cy + card_h - 36 - (len(reason_lines) - 1) * 30
+            reason_lines = _wrap(reason, reason_font, SIZE - MARGIN * 2 - 80)[:2]
+            ry = ky + 12
             for rline in reason_lines:
-                draw.text((MARGIN + 22, ry), rline, font=reason_font, fill=C_MID)
+                draw.text((MARGIN + 68, ry), rline, font=reason_font, fill=C_MID)
                 ry += 30
 
     # 하단 메시지
@@ -413,12 +462,17 @@ def make_slide4(data: dict) -> Image.Image:
         "감성 분석 & 타겟 인사이트",
     ]
     bullet_font = _find_font(30)
-    check_font  = _find_font(30, bold=True)
+    check_font  = _find_font(22, bold=True)
     for benefit in benefits:
-        # 체크 아이콘 (좌측 고정)
-        draw.text((bx + 44, y), "v", font=check_font, fill=(160, 230, 140))
-        draw.text((bx + 88, y), benefit, font=bullet_font, fill=C_WHITE)
-        y += 56
+        # 체크 원형 배지
+        cr = 18
+        cx_icon = bx + 44 + cr
+        cy_icon = y + 18
+        draw.ellipse([cx_icon - cr, cy_icon - cr, cx_icon + cr, cy_icon + cr], fill=C_GREEN_LT)
+        cw = int(draw.textlength("✓", font=check_font))
+        draw.text((cx_icon - cw // 2, cy_icon - 13), "✓", font=check_font, fill=C_PURPLE_DEEP)
+        draw.text((bx + 44 + cr * 2 + 14, y), benefit, font=bullet_font, fill=C_WHITE)
+        y += 58
 
     y += 20
     # 구분선 2

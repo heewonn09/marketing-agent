@@ -287,11 +287,12 @@ def post_instagram(keyword: str, post_date: str) -> None:
         creation_id = res.json().get("id")
         _print(f"      creation_id: {creation_id}")
 
-        # Step 2: 컨테이너 처리 완료 대기 (FINISHED 상태까지 폴링)
+        # Step 2: 컨테이너 처리 완료 대기 (FINISHED 상태까지 폴링, 지수 백오프)
         import time
         _print("[2/3] 컨테이너 처리 대기 중...")
         for attempt in range(POLL_ATTEMPTS):
-            time.sleep(5)
+            wait = min(3 + attempt * 2, 15)  # 3s → 5s → 7s … 최대 15s
+            time.sleep(wait)
             status_res = requests.get(
                 f"{API_BASE}/{creation_id}",
                 params={"fields": "status_code", "access_token": access_token},
@@ -299,7 +300,7 @@ def post_instagram(keyword: str, post_date: str) -> None:
             )
             if status_res.ok:
                 status_code = status_res.json().get("status_code", "")
-                _print(f"      상태: {status_code} ({attempt + 1}/12)")
+                _print(f"      상태: {status_code} ({attempt + 1}/{POLL_ATTEMPTS}, {wait}s 대기)")
                 if status_code == "FINISHED":
                     break
                 if status_code == "ERROR":
@@ -308,7 +309,7 @@ def post_instagram(keyword: str, post_date: str) -> None:
                     save_error_log(keyword, msg)
                     sys.exit(1)
         else:
-            msg = "컨테이너 처리 타임아웃 (60초 초과)"
+            msg = "컨테이너 처리 타임아웃"
             _print(f"[ERROR] {msg}")
             save_error_log(keyword, msg)
             sys.exit(1)
@@ -332,6 +333,19 @@ def post_instagram(keyword: str, post_date: str) -> None:
 
         media_id = pub_res.json().get("id")
         _print(f"\n[OK] Instagram 포스팅 완료 — media_id: {media_id}")
+
+        # permalink 수집 (성과 트래킹용)
+        if media_id:
+            try:
+                detail_res = requests.get(
+                    f"{API_BASE}/{media_id}",
+                    params={"fields": "permalink", "access_token": access_token},
+                    timeout=10,
+                )
+                permalink = detail_res.json().get("permalink", "") if detail_res.ok else ""
+                _print(f"[RESULT_MEDIA]:{media_id}:{permalink}")
+            except Exception:
+                _print(f"[RESULT_MEDIA]:{media_id}:")
 
     except requests.RequestException as e:
         msg = f"네트워크 오류: {e}"
@@ -443,10 +457,11 @@ def post_carousel(keyword: str, post_date: str) -> None:
     carousel_id = res.json().get("id")
     _print(f"      carousel_id: {carousel_id}")
 
-    # Step 3: FINISHED 상태 대기
+    # Step 3: FINISHED 상태 대기 (지수 백오프)
     _print("[carousel] 처리 대기 중...")
     for attempt in range(POLL_ATTEMPTS):
-        time.sleep(5)
+        wait = min(3 + attempt * 2, 15)  # 3s → 5s → … 최대 15s
+        time.sleep(wait)
         status_res = requests.get(
             f"{API_BASE}/{carousel_id}",
             params={"fields": "status_code", "access_token": access_token},
@@ -454,7 +469,7 @@ def post_carousel(keyword: str, post_date: str) -> None:
         )
         if status_res.ok:
             status_code = status_res.json().get("status_code", "")
-            _print(f"      상태: {status_code} ({attempt + 1}/12)")
+            _print(f"      상태: {status_code} ({attempt + 1}/{POLL_ATTEMPTS}, {wait}s 대기)")
             if status_code == "FINISHED":
                 break
             if status_code == "ERROR":
@@ -484,6 +499,19 @@ def post_carousel(keyword: str, post_date: str) -> None:
 
     media_id = pub_res.json().get("id")
     _print(f"\n[OK] Instagram 캐러셀 업로드 완료 — media_id: {media_id}")
+
+    # permalink 수집 (성과 트래킹용)
+    if media_id:
+        try:
+            detail_res = requests.get(
+                f"{API_BASE}/{media_id}",
+                params={"fields": "permalink", "access_token": access_token},
+                timeout=10,
+            )
+            permalink = detail_res.json().get("permalink", "") if detail_res.ok else ""
+            _print(f"[RESULT_MEDIA]:{media_id}:{permalink}")
+        except Exception:
+            _print(f"[RESULT_MEDIA]:{media_id}:")
 
 
 def main():
