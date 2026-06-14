@@ -18,6 +18,7 @@ load_dotenv(Path(__file__).parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.job_store import init_db, upsert_job, get_job, list_jobs
 from utils.cleanup import cleanup_old_files
+from utils.notifier import notify_done, notify_error
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(32).hex()
@@ -96,6 +97,7 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
     q: queue.Queue = jobs[job_id]["queue"]
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
+    jobs[job_id]["last_step"] = name
     q.put(f"STEP:{name}")
     cmd = [PYTHON, str(ROOT / script)] + args
     try:
@@ -115,18 +117,24 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
                 q.put(f"LOG:{line}")
         proc.wait()
         if proc.returncode != 0:
-            q.put(f"ERROR:{name} 실패 (종료 코드: {proc.returncode})")
+            err_msg = f"{name} 실패 (종료 코드: {proc.returncode})"
+            q.put(f"ERROR:{err_msg}")
             if fatal:
                 jobs[job_id]["status"] = "error"
                 upsert_job(job_id, "error")
                 q.put("DONE")
+                kws = jobs[job_id].get("keywords") or []
+                threading.Thread(target=notify_error, args=(kws, name, err_msg), daemon=True).start()
             return False
     except Exception as e:
-        q.put(f"ERROR:{e}")
+        err_msg = str(e)
+        q.put(f"ERROR:{err_msg}")
         if fatal:
             jobs[job_id]["status"] = "error"
             upsert_job(job_id, "error")
             q.put("DONE")
+            kws = jobs[job_id].get("keywords") or []
+            threading.Thread(target=notify_error, args=(kws, name, err_msg), daemon=True).start()
         return False
     return True
 
@@ -202,6 +210,8 @@ def run_pipeline(job_id: str, keywords: list[str]) -> None:
     jobs[job_id]["date"] = today
     upsert_job(job_id, "done", keywords, today)
     jobs[job_id]["queue"].put(f"DONE:{today}")
+    base_url = os.environ.get("CARDNEWS_BASE_URL", "")
+    threading.Thread(target=notify_done, args=(keywords, today, base_url), daemon=True).start()
 
 
 @app.route("/")
@@ -229,7 +239,7 @@ def run():
         return jsonify({"error": "키워드를 입력하세요"}), 400
 
     job_id = uuid.uuid4().hex[:8]
-    jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None}
+    jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None, "keywords": keywords, "last_step": None}
     upsert_job(job_id, "running", keywords)
     threading.Thread(target=run_pipeline, args=(job_id, keywords), daemon=True).start()
     return jsonify({"job_id": job_id})
@@ -294,7 +304,7 @@ def rerun(job_id: str):
     if not keywords:
         return jsonify({"error": "키워드 정보가 없습니다"}), 400
     new_id = uuid.uuid4().hex[:8]
-    jobs[new_id] = {"status": "running", "queue": queue.Queue(), "date": None}
+    jobs[new_id] = {"status": "running", "queue": queue.Queue(), "date": None, "keywords": keywords, "last_step": None}
     upsert_job(new_id, "running", keywords)
     threading.Thread(target=run_pipeline, args=(new_id, keywords), daemon=True).start()
     return jsonify({"job_id": new_id, "keywords": keywords})
@@ -310,6 +320,26 @@ def cardnews_files(report_date: str, keyword: str):
         if (ROOT / "output" / f"cardnews_{safe_kw}_{report_date}_{i}.png").exists()
     ]
     return jsonify({"files": files})
+
+
+@app.route("/test-notify", methods=["POST"])
+def test_notify():
+    """알림 설정 테스트 — 완료/오류 샘플 메시지 발송."""
+    kind = (request.json or {}).get("kind", "done")
+    base_url = os.environ.get("CARDNEWS_BASE_URL", "")
+    if kind == "error":
+        threading.Thread(
+            target=notify_error,
+            args=(["테스트 키워드"], "테스트 스텝", "이것은 테스트 오류 메시지입니다."),
+            daemon=True,
+        ).start()
+    else:
+        threading.Thread(
+            target=notify_done,
+            args=(["테스트 키워드"], "2026-06-14", base_url),
+            daemon=True,
+        ).start()
+    return jsonify({"sent": kind})
 
 
 @app.route("/download/<report_date>")
@@ -332,7 +362,7 @@ def scheduled_run():
         return
     print(f"[scheduler] 자동 실행 시작: {keywords}")
     job_id = uuid.uuid4().hex[:8]
-    jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None}
+    jobs[job_id] = {"status": "running", "queue": queue.Queue(), "date": None, "keywords": keywords, "last_step": None}
     upsert_job(job_id, "running", keywords)
     threading.Thread(target=run_pipeline, args=(job_id, keywords), daemon=True).start()
 
