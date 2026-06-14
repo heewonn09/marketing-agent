@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -43,6 +44,11 @@ DEFAULT_IMAGE_URL = os.environ.get(
 LAST_RESORT_URL = "https://picsum.photos/1080/1080"
 # 미디어 컨테이너 처리 완료 폴링 횟수 (×5초)
 POLL_ATTEMPTS = env_int("IG_POLL_ATTEMPTS", 12)
+# rate limit(429/403) 재시도 횟수 / 기본 백오프(초)
+IG_RETRY_MAX = env_int("IG_RETRY_MAX", 3)
+IG_RETRY_BACKOFF = env_int("IG_RETRY_BACKOFF", 30)
+# Meta rate-limit 에러 코드 (4=앱한도, 17=유저, 32=페이지, 613=커스텀, 80004=콘텐츠발행)
+_RATE_LIMIT_CODES = {4, 17, 32, 613, 80004}
 
 
 def _safe_keyword(keyword: str) -> str:
@@ -240,6 +246,44 @@ def build_caption(ig: dict) -> str:
     return caption
 
 
+def _is_rate_limited(res) -> bool:
+    """응답이 Meta rate limit(앱/유저/콘텐츠 발행 한도)인지 판정."""
+    if res.status_code == 429:
+        return True
+    if res.status_code in (400, 403):
+        try:
+            err = res.json().get("error", {})
+        except Exception:
+            return False
+        if err.get("code") in _RATE_LIMIT_CODES:
+            return True
+        msg = (err.get("message") or "").lower()
+        return "request limit" in msg or "rate limit" in msg
+    return False
+
+
+def _graph_post(url: str, data: dict, *, label: str = "", timeout: int = 30):
+    """Graph API POST. rate limit(429/403)이면 Retry-After/지수 백오프로 재시도.
+
+    한도가 풀리지 않으면 마지막 응답을 그대로 반환(호출측이 에러 처리).
+    """
+    backoff = IG_RETRY_BACKOFF
+    res = None
+    for attempt in range(1, IG_RETRY_MAX + 1):
+        res = requests.post(url, data=data, timeout=timeout)
+        if res.ok or not _is_rate_limited(res):
+            return res
+        if attempt == IG_RETRY_MAX:
+            break
+        retry_after = res.headers.get("Retry-After", "")
+        wait = int(retry_after) if str(retry_after).isdigit() else backoff
+        wait = min(wait, 300)
+        _print(f"      [rate-limit] {label} {res.status_code} — {wait}s 후 재시도 ({attempt}/{IG_RETRY_MAX})")
+        time.sleep(wait)
+        backoff = min(backoff * 2, 300)
+    return res
+
+
 def post_instagram(keyword: str, post_date: str) -> None:
     access_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN")
     account_id = os.environ.get("INSTAGRAM_ACCOUNT_ID")
@@ -268,14 +312,14 @@ def post_instagram(keyword: str, post_date: str) -> None:
     try:
         # Step 1: 미디어 컨테이너 생성
         _print("\n[1/3] 미디어 컨테이너 생성 중...")
-        res = requests.post(
+        res = _graph_post(
             f"{API_BASE}/{account_id}/media",
-            data={
+            {
                 "image_url": image_url,
                 "caption": caption,
                 "access_token": access_token,
             },
-            timeout=30,
+            label="미디어 생성",
         )
         if not res.ok:
             err = res.json().get("error", {})
@@ -316,13 +360,13 @@ def post_instagram(keyword: str, post_date: str) -> None:
 
         # Step 3: 발행
         _print("[3/3] 포스트 발행 중...")
-        pub_res = requests.post(
+        pub_res = _graph_post(
             f"{API_BASE}/{account_id}/media_publish",
-            data={
+            {
                 "creation_id": creation_id,
                 "access_token": access_token,
             },
-            timeout=30,
+            label="발행",
         )
         if not pub_res.ok:
             err = pub_res.json().get("error", {})
@@ -412,11 +456,11 @@ def post_carousel(keyword: str, post_date: str) -> None:
         item_id = None
         last_msg = ""
         for retry in range(3):
-            res = requests.post(
+            res = _graph_post(
                 f"{API_BASE}/{account_id}/media",
-                data={"image_url": url, "is_carousel_item": "true",
-                      "access_token": access_token},
-                timeout=30,
+                {"image_url": url, "is_carousel_item": "true",
+                 "access_token": access_token},
+                label=f"item {idx}",
             )
             if res.ok:
                 item_id = res.json().get("id")
@@ -438,15 +482,15 @@ def post_carousel(keyword: str, post_date: str) -> None:
     caption = build_caption(content.get("instagram", {}))
 
     _print("\n[2/3] 캐러셀 컨테이너 생성 중...")
-    res = requests.post(
+    res = _graph_post(
         f"{API_BASE}/{account_id}/media",
-        data={
+        {
             "media_type": "CAROUSEL",
             "children": ",".join(item_ids),
             "caption": caption,
             "access_token": access_token,
         },
-        timeout=30,
+        label="캐러셀 생성",
     )
     if not res.ok:
         err = res.json().get("error", {})
@@ -485,10 +529,10 @@ def post_carousel(keyword: str, post_date: str) -> None:
 
     # Step 4: 발행
     _print("[3/3] 캐러셀 발행 중...")
-    pub_res = requests.post(
+    pub_res = _graph_post(
         f"{API_BASE}/{account_id}/media_publish",
-        data={"creation_id": carousel_id, "access_token": access_token},
-        timeout=30,
+        {"creation_id": carousel_id, "access_token": access_token},
+        label="캐러셀 발행",
     )
     if not pub_res.ok:
         err = pub_res.json().get("error", {})
