@@ -1023,7 +1023,9 @@
             if(el){el.className='step pending-approval';el.querySelector('.step-icon').textContent='⏸';}
         });
         document.getElementById('btn-run').disabled = true;
-        // SSE 재연결 → 서버가 PENDING 이벤트 즉시 전송 → onPending 호출
+        // 콘텐츠를 바로 표시 (inPendingState 플래그로 SSE PENDING 중복 렌더링 방지)
+        onPending(reportDate);
+        // SSE 재연결 → Part2 이벤트 수신 (PENDING은 플래그로 무시됨)
         listenStream(jobId);
     }
 
