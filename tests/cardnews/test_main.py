@@ -1,44 +1,68 @@
+"""cardnews (Gemini Imagen 3 기반 홍보 이미지 생성기) 테스트.
+
+기존 Pillow 카드 디자인은 b56e8d7에서 Imagen 3 구현으로 교체됨.
+현재 순수/모킹 가능한 함수: _safe_keyword, _generate_prompts, _generate_image.
+"""
 from agents.cardnews import main as cardnews
 
 
+# ── 가짜 Gemini 클라이언트 ────────────────────────────────────────────────
+class _FakeResp:
+    def __init__(self, text):
+        self.text = text
+
+
+class _FakeModels:
+    def __init__(self, text):
+        self._text = text
+
+    def generate_content(self, **kw):
+        return _FakeResp(self._text)
+
+
+class _FakeClient:
+    def __init__(self, text):
+        self.models = _FakeModels(text)
+
+
+def _patch_client(monkeypatch, text):
+    monkeypatch.setattr(cardnews, "_client", lambda: _FakeClient(text))
+
+
+# ── _safe_keyword ─────────────────────────────────────────────────────────
 def test_safe_keyword_replaces_special_chars():
     assert cardnews._safe_keyword('a/b:c*d?e') == "a_b_c_d_e"
 
 
-def test_wrap_preserves_all_characters():
-    font = cardnews._find_font(20)
-    text = "가나다라마바사아자차카타파하" * 3
-    lines = cardnews._wrap(text, font, 120)
-    # 줄바꿈을 하더라도 글자는 하나도 손실되면 안 된다
-    assert "".join(lines) == text
+# ── _generate_prompts ─────────────────────────────────────────────────────
+def test_generate_prompts_parses_json_array(monkeypatch):
+    _patch_client(monkeypatch, '["p1", "p2", "p3", "p4"]')
+    out = cardnews._generate_prompts({}, "AI 마케팅")
+    assert out == ["p1", "p2", "p3", "p4"]
 
 
-def test_wrap_width_one_forces_one_char_per_line():
-    font = cardnews._find_font(20)
-    lines = cardnews._wrap("abcde", font, 1)
-    assert lines == list("abcde")
+def test_generate_prompts_pads_to_four(monkeypatch):
+    _patch_client(monkeypatch, '["only one"]')
+    out = cardnews._generate_prompts({}, "AI 마케팅")
+    assert len(out) == 4
+    assert out[0] == "only one"
 
 
-def test_clean_strips_markdown_and_heading():
-    assert cardnews._clean("**데이터 기반 전략**") == "데이터 기반 전략"
-    assert cardnews._clean("*기울임*") == "기울임"
-    assert cardnews._clean("# 제목") == "제목"
+def test_generate_prompts_fallback_on_bad_json(monkeypatch):
+    _patch_client(monkeypatch, "여기엔 JSON 배열이 없습니다")
+    out = cardnews._generate_prompts({}, "AI 마케팅")
+    assert len(out) == 4
+    assert all("AI 마케팅" in p for p in out)  # 폴백 프롬프트는 키워드 포함
 
 
-def test_first_sentences_returns_full_when_short():
-    assert cardnews._first_sentences("짧은 문장입니다.", 50) == "짧은 문장입니다."
+# ── _generate_image ───────────────────────────────────────────────────────
+def test_generate_image_returns_none_on_error(monkeypatch):
+    class _RaisingModels:
+        def generate_images(self, **kw):
+            raise RuntimeError("API 오류")
 
+    class _RaisingClient:
+        models = _RaisingModels()
 
-def test_first_sentences_drops_unclosed_paren():
-    out = cardnews._first_sentences("핵심 문장입니다. (ex. 부연 설명", 100)
-    assert "(" not in out
-    assert "ex" not in out
-    assert out.startswith("핵심 문장입니다")
-
-
-def test_first_sentences_trims_long_single_sentence_at_word_boundary():
-    text = "가나다 라마바 사아자 차카타 파하가 나다라 마바사 아자차"
-    out = cardnews._first_sentences(text, 12)
-    assert len(out) <= 12
-    # 단어 중간이 잘리지 않음: 결과의 모든 토큰이 원문 단어
-    assert all(tok in text.split() for tok in out.split())
+    monkeypatch.setattr(cardnews, "_client", lambda: _RaisingClient())
+    assert cardnews._generate_image("prompt", 1) is None
