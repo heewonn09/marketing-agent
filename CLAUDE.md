@@ -2,22 +2,36 @@
 
 ## 프로젝트 개요
 
-마케팅 데이터 수집부터 리포트 생성까지 자동화하는 5개 에이전트 시스템.
+키워드 입력부터 수집·분석·콘텐츠 생성·리포트·발행까지 자동화하는 멀티 에이전트 시스템.
+CLI(`orchestrator.py`)와 웹(`app.py`, 2단계 승인 게이트 + SSE) 두 경로로 실행한다.
+
+> 상세 구조·파이프라인·웹 API·DB 스키마는 [`docs/architecture.md`](docs/architecture.md),
+> 보안 설정은 [`docs/security.md`](docs/security.md) 참고.
 
 ## 구조
 
 ```
 marketing-agent/
 ├── agents/
-│   ├── collector/    # 에이전트 1: 네이버 블로그 등 데이터 수집
-│   ├── analyzer/     # 에이전트 2: 수집 데이터 분석
-│   ├── writer/       # 에이전트 3: 마케팅 콘텐츠 생성
-│   ├── reporter/     # 에이전트 4: 리포트 생성
-│   ├── monitor/      # 에이전트 5: 지속 모니터링
-│   └── poster/       # 에이전트 6: 네이버 블로그 자동 포스팅
-├── data/             # 수집된 원시 데이터 (JSON)
-├── output/           # 최종 결과물
-├── venv/             # Python 가상환경
+│   ├── collector/    # 1: 네이버 검색 데이터 수집
+│   ├── analyzer/     # 2: Gemini + 데이터랩 분석
+│   ├── writer/       # 3: 마케팅 콘텐츠 생성
+│   ├── reporter/     # 4: HTML/PDF 리포트
+│   ├── monitor/      # 5: 키워드 신규 포스트 모니터링
+│   ├── cardnews/     # 6: 카드뉴스 이미지 4종
+│   ├── poster/       # 7a: 네이버 블로그 발행
+│   ├── instagram/    # 7b: Instagram 발행
+│   ├── sales/        # 부가: 리드 수집/메일
+│   └── healthcheck/  # 부가: 파이프라인 산출물 점검
+├── utils/            # 공용 모듈 (로깅/설정/체크포인트/암호화/인증 등)
+├── tests/            # pytest (CI: .github/workflows/ci.yml)
+├── docs/             # architecture.md, security.md, 설계 문서
+├── data/             # 원시·분석 데이터, 상태 파일 (gitignore)
+├── output/           # 콘텐츠·리포트·카드뉴스 (gitignore)
+├── logs/             # 구조적 로그 (gitignore)
+├── app.py            # Flask 웹앱
+├── orchestrator.py   # CLI 파이프라인 (--resume)
+├── venv/
 └── requirements.txt
 ```
 

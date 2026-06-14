@@ -157,6 +157,9 @@ IG_POLL_ATTEMPTS=12           # instagram 미디어 처리 폴링 횟수(×5초)
 
 > **보안**: 자격증명 보호(HTTPS·로그인 시도 제한·비밀번호 해시), 네이버 쿠키 at-rest 암호화,
 > poster 봇 감지 회피(stealth·프록시) 설정은 [`docs/security.md`](docs/security.md) 참고.
+>
+> **아키텍처/API**: 시스템 구조·파이프라인·웹 API 레퍼런스·DB 스키마·배포 토폴로지는
+> [`docs/architecture.md`](docs/architecture.md) 참고.
 
 ### 3. 네이버 로그인 쿠키 초기화 (poster 첫 실행 시, 로컬만)
 
