@@ -98,6 +98,22 @@ def _pick_accessible_fallback() -> str:
     return LAST_RESORT_URL
 
 
+def fetch_slide1_url(keyword: str, post_date: str) -> str | None:
+    """카드뉴스 슬라이드 1 이미지 URL 반환 (CARDNEWS_BASE_URL 기반).
+    Meta 크롤러가 접근 가능한지 HEAD 요청으로 사전 확인."""
+    base_url = os.environ.get("CARDNEWS_BASE_URL", "").rstrip("/")
+    if not base_url:
+        return None
+    safe_kw = _safe_keyword(keyword)
+    url = f"{base_url}/cardnews/{quote(f'cardnews_{safe_kw}_{post_date}_1.png')}"
+    _print(f"[image] 카드뉴스 슬라이드1 URL 확인: {url[:80]}...")
+    if _check_url_accessible(url):
+        _print("[image] 카드뉴스 슬라이드1 사용")
+        return url
+    _print("[image] 카드뉴스 슬라이드1 접근 불가 — Unsplash로 대체")
+    return None
+
+
 def fetch_unsplash_image(keyword: str) -> str:
     """Unsplash에서 키워드 관련 이미지 URL 반환.
     각 후보 URL은 requests.head()로 접근 가능 여부 확인 후 사용."""
@@ -119,14 +135,18 @@ def fetch_unsplash_image(keyword: str) -> str:
         if res.ok:
             results = res.json().get("results", [])
             if results:
-                candidate = results[0]["urls"]["regular"]
-                desc = results[0].get("alt_description") or results[0].get("description") or "no description"
-                _print(f"[unsplash] 이미지 검색 성공: {desc[:60]}")
-                _print(f"[unsplash] URL 접근성 확인 중...")
-                if _check_url_accessible(candidate):
-                    _print(f"[unsplash] URL 접근 가능: {candidate[:80]}...")
-                    return candidate
-                _print(f"[unsplash] URL 접근 불가 — 폴백 사용")
+                # Unsplash /download 엔드포인트 URL은 Meta 크롤러가 리다이렉트 미지원으로
+                # 접근 실패하는 경우가 있음 → raw URLs 중 접근 가능한 것 선택
+                for url_key in ("full", "regular", "small"):
+                    candidate = results[0]["urls"].get(url_key, "")
+                    if not candidate:
+                        continue
+                    desc = results[0].get("alt_description") or "no description"
+                    _print(f"[unsplash] 이미지 후보({url_key}): {desc[:50]}")
+                    if _check_url_accessible(candidate):
+                        _print(f"[unsplash] URL 접근 가능: {candidate[:80]}...")
+                        return candidate
+                _print("[unsplash] 모든 URL 접근 불가 — 폴백 사용")
         _print(f"[unsplash] 검색 결과 없음 ({res.status_code}) — 기본 이미지 사용")
     except requests.RequestException as e:
         _print(f"[unsplash] 요청 실패: {e} — 기본 이미지 사용")
@@ -161,7 +181,9 @@ def post_instagram(keyword: str, post_date: str) -> None:
 
     _print(f"[instagram] 캡션 ({len(caption)}자):\n{caption[:200]}{'...' if len(caption) > 200 else ''}")
 
-    image_url = fetch_unsplash_image(keyword)
+    # 이미지 우선순위: 카드뉴스 슬라이드1 → Unsplash → picsum 폴백
+    # Unsplash CDN URL은 Meta 크롤러가 리다이렉트 실패로 "Media ID is not available" 유발 가능
+    image_url = fetch_slide1_url(keyword, post_date) or fetch_unsplash_image(keyword)
     _print(f"[instagram] 최종 이미지 URL: {image_url[:80]}{'...' if len(image_url) > 80 else ''}")
 
     try:
