@@ -11,6 +11,7 @@ import google.genai as genai
 from google.genai import types
 from dotenv import load_dotenv
 import requests
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(ROOT / ".env")
@@ -19,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 from utils.gemini_retry import gemini_retry
 
 CLIENT = None
+_FONT_DIR = ROOT / "assets" / "fonts"
 
 
 def _client() -> genai.Client:
@@ -30,6 +32,188 @@ def _client() -> genai.Client:
 
 def _safe_keyword(keyword: str) -> str:
     return re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+
+
+def _font(size: int, weight: str = "regular") -> ImageFont.FreeTypeFont:
+    name_map = {
+        "regular": "NanumGothic-Regular.ttf",
+        "bold":    "NanumGothic-Bold.ttf",
+        "xl":      "NanumGothic-ExtraBold.ttf",
+    }
+    try:
+        return ImageFont.truetype(str(_FONT_DIR / name_map[weight]), size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+def _shadow_text(draw: ImageDraw.ImageDraw, x: int, y: int, text: str,
+                 font: ImageFont.FreeTypeFont,
+                 color=(255, 255, 255, 255),
+                 shadow=(0, 0, 0, 160)) -> int:
+    """그림자 포함 텍스트 렌더링, 텍스트 높이 반환."""
+    draw.text((x + 2, y + 2), text, font=font, fill=shadow)
+    draw.text((x, y), text, font=font, fill=color)
+    bbox = draw.textbbox((x, y), text, font=font)
+    return bbox[3] - bbox[1]
+
+
+def _wrap_korean(draw: ImageDraw.ImageDraw, text: str,
+                 font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+    """한국어 포함 텍스트 줄바꿈 (글자 단위)."""
+    lines: list[str] = []
+    current = ""
+    for ch in text:
+        test = current + ch
+        w = draw.textbbox((0, 0), test, font=font)[2]
+        if w > max_width and current:
+            lines.append(current)
+            current = ch
+        else:
+            current = test
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _gradient_banner(draw: ImageDraw.ImageDraw, x0: int, y0: int,
+                     x1: int, y1: int, top_alpha: int, bottom_alpha: int) -> None:
+    """수직 그라디언트 반투명 배너."""
+    h = y1 - y0
+    for dy in range(h):
+        a = int(top_alpha + (bottom_alpha - top_alpha) * dy / max(h - 1, 1))
+        draw.rectangle([(x0, y0 + dy), (x1, y0 + dy + 1)], fill=(0, 0, 0, a))
+
+
+def _apply_overlay(img_bytes: bytes, slide_idx: int,
+                   data: dict, keyword: str, file_date: str) -> bytes:
+    """Imagen 4 raw 이미지에 슬라이드별 마케팅 텍스트 오버레이 적용."""
+    import io
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
+    W, H = img.size
+
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    PAD       = W // 18
+    BANNER_H  = H // 5
+    LINE_GAP  = W // 55
+
+    # 폰트 크기 (이미지 너비 기준)
+    SZ_LABEL = max(22, W // 34)
+    SZ_BODY  = max(26, W // 28)
+    SZ_TITLE = max(38, W // 18)
+    SZ_XL    = max(50, W // 13)
+
+    # ── 상단 배너 (위 불투명 → 아래 투명) ──────────────────────────────────
+    _gradient_banner(draw, 0, 0, W, BANNER_H, top_alpha=210, bottom_alpha=0)
+    # ── 하단 배너 (위 투명 → 아래 불투명) ──────────────────────────────────
+    _gradient_banner(draw, 0, H - BANNER_H, W, H, top_alpha=0, bottom_alpha=220)
+
+    ACCENT_GREEN  = (120, 255, 160, 255)
+    ACCENT_AMBER  = (255, 210, 80,  255)
+    ACCENT_BLUE   = (140, 210, 255, 255)
+    WHITE         = (255, 255, 255, 255)
+    WHITE_DIM     = (200, 200, 200, 210)
+
+    # ────────────────────────────────────────────────────────────────────────
+    # 슬라이드 1 — 커버 (키워드 대제목 + 트렌드 요약)
+    # ────────────────────────────────────────────────────────────────────────
+    if slide_idx == 1:
+        # 상단: 레이블 + 키워드
+        y = PAD
+        y += _shadow_text(draw, PAD, y, "📊  마케팅 트렌드 분석",
+                          _font(SZ_LABEL, "bold"), ACCENT_GREEN) + LINE_GAP
+        y += _shadow_text(draw, PAD, y, f"#{keyword}",
+                          _font(SZ_XL, "xl"), WHITE) + LINE_GAP * 2
+        # 키워드 아래: 관련 키워드 태그 (소)
+        kws = [k.get("word", "") for k in data.get("keywords", [])[:3]]
+        if kws:
+            _shadow_text(draw, PAD, y, "  ".join(f"#{w}" for w in kws),
+                         _font(SZ_LABEL, "regular"), WHITE_DIM)
+
+        # 하단: 트렌드 요약 (최대 2줄)
+        summary = data.get("trend_summary", "")
+        lines = _wrap_korean(draw, summary, _font(SZ_BODY, "regular"), W - PAD * 2)[:2]
+        y_b = H - BANNER_H + PAD // 2
+        for line in lines:
+            y_b += _shadow_text(draw, PAD, y_b, line,
+                                _font(SZ_BODY, "regular"), WHITE) + LINE_GAP
+
+        # 날짜 (우하단)
+        date_txt = file_date
+        date_font = _font(SZ_LABEL - 4, "regular")
+        date_w = draw.textbbox((0, 0), date_txt, font=date_font)[2]
+        _shadow_text(draw, W - date_w - PAD, H - PAD - SZ_LABEL,
+                     date_txt, date_font, WHITE_DIM)
+
+    # ────────────────────────────────────────────────────────────────────────
+    # 슬라이드 2 — 주요 트렌드 3가지
+    # ────────────────────────────────────────────────────────────────────────
+    elif slide_idx == 2:
+        # 상단
+        y = PAD
+        y += _shadow_text(draw, PAD, y, "🔥  지금 주목해야 할 트렌드",
+                          _font(SZ_LABEL, "bold"), ACCENT_AMBER) + LINE_GAP
+        _shadow_text(draw, PAD, y, keyword, _font(SZ_TITLE, "bold"), WHITE)
+
+        # 하단: 트렌드 3개
+        trends = [str(t) for t in data.get("trends", [])[:3]]
+        y_b = H - BANNER_H + PAD // 2
+        for t in trends:
+            lines = _wrap_korean(draw, f"• {t}", _font(SZ_BODY, "regular"), W - PAD * 2)[:2]
+            for line in lines:
+                y_b += _shadow_text(draw, PAD, y_b, line,
+                                    _font(SZ_BODY, "regular"), WHITE) + LINE_GAP // 2
+            y_b += LINE_GAP
+
+    # ────────────────────────────────────────────────────────────────────────
+    # 슬라이드 3 — 핵심 인사이트
+    # ────────────────────────────────────────────────────────────────────────
+    elif slide_idx == 3:
+        # 상단
+        y = PAD
+        y += _shadow_text(draw, PAD, y, "💡  핵심 인사이트",
+                          _font(SZ_LABEL, "bold"), ACCENT_BLUE) + LINE_GAP
+        _shadow_text(draw, PAD, y, keyword, _font(SZ_TITLE, "bold"), WHITE)
+
+        # 하단: 인사이트 2개 (각 최대 2줄)
+        insights = [str(ins) for ins in data.get("insights", [])[:2]]
+        y_b = H - BANNER_H + PAD // 2
+        for ins in insights:
+            lines = _wrap_korean(draw, f"▶  {ins}", _font(SZ_BODY, "regular"), W - PAD * 2)[:2]
+            for line in lines:
+                y_b += _shadow_text(draw, PAD, y_b, line,
+                                    _font(SZ_BODY, "regular"), WHITE) + LINE_GAP // 2
+            y_b += LINE_GAP
+
+    # ────────────────────────────────────────────────────────────────────────
+    # 슬라이드 4 — CTA (팔로우 유도)
+    # ────────────────────────────────────────────────────────────────────────
+    elif slide_idx == 4:
+        # 상단: 브랜드 + 슬로건
+        y = PAD
+        y += _shadow_text(draw, PAD, y, "✨  @auto.markai",
+                          _font(SZ_LABEL, "bold"), ACCENT_GREEN) + LINE_GAP
+        y += _shadow_text(draw, PAD, y, "마케팅 자동화",
+                          _font(SZ_XL, "xl"), WHITE) + LINE_GAP // 2
+        _shadow_text(draw, PAD, y, "트렌드 분석 에이전트",
+                     _font(SZ_TITLE - 4, "bold"), WHITE_DIM)
+
+        # 하단: 팔로우 CTA + 해시태그
+        y_b = H - BANNER_H + PAD // 2
+        y_b += _shadow_text(draw, PAD, y_b, "팔로우하고 매일 트렌드를 받아보세요 →",
+                            _font(SZ_BODY, "bold"), ACCENT_GREEN) + LINE_GAP
+        kws = [k.get("word", "") for k in data.get("keywords", [])[:5]]
+        if kws:
+            tags = "  ".join(f"#{w}" for w in kws)
+            _shadow_text(draw, PAD, y_b, tags,
+                         _font(SZ_LABEL, "regular"), WHITE_DIM)
+
+    # ── 합성 ────────────────────────────────────────────────────────────────
+    result = Image.alpha_composite(img, overlay).convert("RGB")
+    buf = io.BytesIO()
+    result.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
 
 @gemini_retry
@@ -70,18 +254,16 @@ Output ONLY a valid JSON array of 4 strings:
         try:
             prompts = json.loads(match.group())
             if isinstance(prompts, list) and len(prompts) >= 1:
-                # 4개 보장
                 while len(prompts) < 4:
                     prompts.append(prompts[0])
                 return prompts[:4]
         except json.JSONDecodeError:
             pass
 
-    # 파싱 실패 시 기본 프롬프트
     base = (
         f"Professional Korean marketing promotional image for '{keyword}', "
         "modern minimalist style, bright clean background, no text, "
-        "4:5 portrait ratio, high quality"
+        "3:4 portrait ratio, high quality"
     )
     return [base, base, base, base]
 
@@ -132,7 +314,7 @@ def _upload_to_imgbb(filepath: Path, api_key: str) -> str | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Gemini Imagen 3 홍보 이미지 생성기")
+    parser = argparse.ArgumentParser(description="Gemini Imagen 4 홍보 이미지 생성기 (오버레이 포함)")
     parser.add_argument("--keyword",  required=True)
     parser.add_argument("--date", dest="target_date", default=None)
     args = parser.parse_args()
@@ -169,15 +351,21 @@ def main() -> None:
     for i, p in enumerate(prompts, 1):
         print(f"  프롬프트 {i}: {p[:90]}...")
 
-    # Imagen 3 이미지 생성
-    print("[promo-image] Imagen 3 이미지 생성 중 (4장)...")
+    # Imagen 4 이미지 생성 + 오버레이 적용
+    print("[promo-image] Imagen 4 이미지 생성 + 오버레이 적용 중 (4장)...")
     saved = []
     for i, prompt in enumerate(prompts, 1):
         print(f"  [{i}/4] 생성 중...")
-        img_bytes = _generate_image(prompt, i)
-        if img_bytes:
+        raw_bytes = _generate_image(prompt, i)
+        if raw_bytes:
+            print(f"  [{i}/4] 오버레이 적용 중...")
+            try:
+                final_bytes = _apply_overlay(raw_bytes, i, data, keyword, file_date)
+            except Exception as e:
+                print(f"  [{i}/4] 오버레이 실패 ({e}) — 원본 사용", file=sys.stderr)
+                final_bytes = raw_bytes
             out = output_dir / f"cardnews_{safe_kw}_{file_date}_{i}.png"
-            out.write_bytes(img_bytes)
+            out.write_bytes(final_bytes)
             print(f"  [{i}/4] 저장 완료: {out.name}")
             saved.append(out)
         else:
@@ -187,15 +375,15 @@ def main() -> None:
         print("[ERROR] 이미지를 하나도 생성하지 못했습니다.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"[promo-image] 완료 - {len(saved)}장 저장")
+    print(f"[promo-image] 완료 - {len(saved)}장 저장 (오버레이 적용됨)")
 
     # imgbb 업로드: IMGBB_API_KEY 설정 시 HTTPS URL 파일 생성
     imgbb_key = os.environ.get("IMGBB_API_KEY", "").strip()
     if imgbb_key:
         print("[promo-image] imgbb 업로드 중 (Instagram HTTPS 이미지 호스팅)...")
         urls: dict[str, str] = {}
-        for i, path in enumerate(saved, 1):
-            url = _upload_to_imgbb(path, imgbb_key)
+        for i, p in enumerate(saved, 1):
+            url = _upload_to_imgbb(p, imgbb_key)
             if url:
                 urls[str(i)] = url
                 print(f"  [{i}/4] imgbb URL: {url}")
