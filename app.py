@@ -234,14 +234,15 @@ def _run_pipeline_part2(job_id: str, keywords: list[str], today: str) -> None:
     threading.Thread(target=notify_done, args=(keywords, today, base_url), daemon=True).start()
 
 
-def _run_per_keyword(job_id: str, keyword: str) -> bool:
-    """키워드 하나의 수집→분석→작성을 순차 실행. 실패 시 False 반환."""
+def _run_per_keyword(job_id: str, keyword: str, fatal: bool = True) -> bool:
+    """키워드 하나의 수집→분석→작성을 순차 실행. 실패 시 False 반환.
+    fatal=False면 실패해도 잡 전체를 error로 만들지 않음(복수 키워드 부분 실패 허용용)."""
     for name, script, args in [
         (f"수집 [{keyword}]", "agents/collector/main.py", ["--keyword", keyword]),
         (f"분석 [{keyword}]", "agents/analyzer/main.py",  ["--keyword", keyword]),
         (f"작성 [{keyword}]", "agents/writer/main.py",    ["--keyword", keyword]),
     ]:
-        if not _run_cmd(job_id, name, script, args):
+        if not _run_cmd(job_id, name, script, args, fatal=fatal):
             return False
     return True
 
@@ -251,19 +252,30 @@ def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False) -> N
     today = date.today().isoformat()
 
     if len(keywords) == 1:
-        # 단일 키워드: 직접 실행
+        # 단일 키워드: 직접 실행 (실패 시 잡 error)
         if not _run_per_keyword(job_id, keywords[0]):
             return
     else:
-        # 복수 키워드: 키워드별 수집/분석/작성을 최대 3개 병렬로
-        failed = threading.Event()
+        # 복수 키워드: 부분 실패 허용 — 실패한 키워드는 제외하고 성공한 것으로 계속 진행
+        ok_keywords: list[str] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(keywords), 3)) as ex:
-            futures = {ex.submit(_run_per_keyword, job_id, kw): kw for kw in keywords}
+            futures = {ex.submit(_run_per_keyword, job_id, kw, False): kw for kw in keywords}
             for fut in concurrent.futures.as_completed(futures):
-                if not fut.result():
-                    failed.set()
-        if failed.is_set():
+                kw = futures[fut]
+                if fut.result():
+                    ok_keywords.append(kw)
+                else:
+                    jobs[job_id]["queue"].put(f"LOG:[{kw}] 수집/분석/작성 실패 — 이 키워드는 제외하고 계속 진행")
+        if not ok_keywords:
+            jobs[job_id]["status"] = "error"
+            upsert_job(job_id, "error")
+            jobs[job_id]["queue"].put("ERROR:모든 키워드 처리 실패")
+            jobs[job_id]["queue"].put("DONE")
+            threading.Thread(target=notify_error,
+                             args=(keywords, "전체 키워드", "모든 키워드 처리 실패"),
+                             daemon=True).start()
             return
+        keywords = ok_keywords  # 이후 단계(리포트/모니터/카드뉴스/발행)는 성공한 키워드로만
 
     for name, script, step_args in [
         ("리포트 [통합]", "agents/reporter/main.py", ["--date", today]),
