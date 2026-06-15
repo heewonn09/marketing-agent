@@ -1,4 +1,5 @@
 import argparse
+import base64
 import json
 import os
 import re
@@ -9,6 +10,7 @@ from pathlib import Path
 import google.genai as genai
 from google.genai import types
 from dotenv import load_dotenv
+import requests
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(ROOT / ".env")
@@ -111,6 +113,24 @@ def _generate_image(prompt: str, index: int, max_retries: int = 3) -> bytes | No
     return None
 
 
+def _upload_to_imgbb(filepath: Path, api_key: str) -> str | None:
+    """imgbb.com에 이미지를 업로드하고 직접 링크(HTTPS)를 반환."""
+    try:
+        with open(filepath, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        res = requests.post(
+            "https://api.imgbb.com/1/upload",
+            data={"key": api_key, "image": b64, "name": filepath.stem},
+            timeout=30,
+        )
+        if res.ok:
+            return res.json()["data"]["url"]
+        print(f"  [imgbb] 업로드 실패 {res.status_code}: {res.text[:120]}", file=sys.stderr)
+    except Exception as e:
+        print(f"  [imgbb] 업로드 오류: {e}", file=sys.stderr)
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Gemini Imagen 3 홍보 이미지 생성기")
     parser.add_argument("--keyword",  required=True)
@@ -163,11 +183,29 @@ def main() -> None:
         else:
             print(f"  [{i}/4] 건너뜀")
 
-    if saved:
-        print(f"[promo-image] 완료 - {len(saved)}장 저장")
-    else:
+    if not saved:
         print("[ERROR] 이미지를 하나도 생성하지 못했습니다.", file=sys.stderr)
         sys.exit(1)
+
+    print(f"[promo-image] 완료 - {len(saved)}장 저장")
+
+    # imgbb 업로드: IMGBB_API_KEY 설정 시 HTTPS URL 파일 생성
+    imgbb_key = os.environ.get("IMGBB_API_KEY", "").strip()
+    if imgbb_key:
+        print("[promo-image] imgbb 업로드 중 (Instagram HTTPS 이미지 호스팅)...")
+        urls: dict[str, str] = {}
+        for i, path in enumerate(saved, 1):
+            url = _upload_to_imgbb(path, imgbb_key)
+            if url:
+                urls[str(i)] = url
+                print(f"  [{i}/4] imgbb URL: {url}")
+            else:
+                print(f"  [{i}/4] 업로드 실패 — CARDNEWS_BASE_URL 폴백 사용")
+        if urls:
+            urls_path = output_dir / f"cardnews_urls_{safe_kw}_{file_date}.json"
+            with open(urls_path, "w", encoding="utf-8") as f:
+                json.dump(urls, f, ensure_ascii=False, indent=2)
+            print(f"[promo-image] imgbb URL 저장: {urls_path.name}")
 
 
 if __name__ == "__main__":

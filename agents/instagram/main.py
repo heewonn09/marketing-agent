@@ -421,10 +421,32 @@ def post_carousel(keyword: str, post_date: str) -> None:
     access_token = ensure_fresh_token(access_token)
 
     safe_kw = _safe_keyword(keyword)
-    image_urls = [
-        f"{base_url}/cardnews/{quote(f'cardnews_{safe_kw}_{post_date}_{i}.png')}"
-        for i in range(1, 5)
-    ]
+
+    # imgbb 업로드된 HTTPS URL이 있으면 우선 사용 (Instagram이 HTTPS 필요)
+    urls_file = ROOT / "output" / f"cardnews_urls_{safe_kw}_{post_date}.json"
+    if urls_file.exists():
+        try:
+            with open(urls_file, encoding="utf-8") as f:
+                imgbb_map: dict = json.load(f)
+            if imgbb_map and all(str(i) in imgbb_map for i in range(1, 5)):
+                image_urls = [imgbb_map[str(i)] for i in range(1, 5)]
+                _print(f"[carousel] imgbb HTTPS URL 사용: {urls_file.name}")
+            else:
+                image_urls = [
+                    f"{base_url}/cardnews/{quote(f'cardnews_{safe_kw}_{post_date}_{i}.png')}"
+                    for i in range(1, 5)
+                ]
+        except Exception as e:
+            _print(f"[carousel] URL 파일 읽기 실패: {e} — CARDNEWS_BASE_URL 사용")
+            image_urls = [
+                f"{base_url}/cardnews/{quote(f'cardnews_{safe_kw}_{post_date}_{i}.png')}"
+                for i in range(1, 5)
+            ]
+    else:
+        image_urls = [
+            f"{base_url}/cardnews/{quote(f'cardnews_{safe_kw}_{post_date}_{i}.png')}"
+            for i in range(1, 5)
+        ]
 
     _print(f"[carousel] 키워드: {keyword} / 날짜: {post_date}")
     _print("[carousel] 이미지 URL:")
