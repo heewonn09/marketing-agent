@@ -93,3 +93,40 @@ def test_find_latest_report_returns_latest(tmp_path):
     result = find_latest_report(tmp_path)
     assert result is not None
     assert "2026-06-10" in result.name
+
+# ── #6 콜드메일 법적 보강 ────────────────────────────────────────────────
+def test_email_body_has_unsubscribe_notice():
+    from agents.sales.main import build_email_body
+    body = build_email_body("테스트회사")
+    assert "수신거부" in body
+    assert "광고성 정보" in body
+
+
+def test_run_send_blocked_without_sales_enabled(monkeypatch):
+    from agents.sales import main as sales
+    import utils.email_sender as es
+    monkeypatch.setattr(sales, "_out", lambda *a, **k: None)
+    monkeypatch.delenv("SALES_ENABLED", raising=False)
+    monkeypatch.setattr(sales, "load_leads",
+                        lambda p: [{"name": "A", "email": "a@b.com", "website": "x"}])
+    monkeypatch.setattr(sales, "find_latest_report", lambda d: Path("dummy.pdf"))
+    calls = {"n": 0}
+    monkeypatch.setattr(es, "send_email", lambda **k: calls.__setitem__("n", calls["n"] + 1))
+    sales._run_send(dry_run=False)
+    assert calls["n"] == 0  # SALES_ENABLED 없으면 발송 안 함
+
+
+def test_run_send_allows_with_sales_enabled(monkeypatch):
+    from agents.sales import main as sales
+    import utils.email_sender as es
+    monkeypatch.setattr(sales, "_out", lambda *a, **k: None)
+    monkeypatch.setenv("SALES_ENABLED", "1")
+    monkeypatch.setattr(sales, "load_leads",
+                        lambda p: [{"name": "A", "email": "a@b.com", "website": "x"}])
+    monkeypatch.setattr(sales, "find_latest_report", lambda d: Path("dummy.pdf"))
+    monkeypatch.setattr(sales, "load_sent", lambda p: set())
+    monkeypatch.setattr(sales, "mark_sent", lambda e, p: None)
+    calls = {"n": 0}
+    monkeypatch.setattr(es, "send_email", lambda **k: calls.__setitem__("n", calls["n"] + 1))
+    sales._run_send(dry_run=False)
+    assert calls["n"] == 1  # 옵트인 시 발송

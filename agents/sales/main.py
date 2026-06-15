@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sys
 from datetime import datetime
@@ -145,6 +146,7 @@ def build_email_body(company_name: str) -> str:
 
 ---
 auto.markai | 마케팅 인사이트 자동화
+※ 본 메일은 영리목적 광고성 정보입니다. 수신을 원치 않으시면 본 메일에 '수신거부'로 회신해 주시면 즉시 발송을 중단합니다.
 """
 
 
@@ -178,12 +180,19 @@ def _run_send(dry_run: bool = False) -> None:
         _out("[sales] output/report_*.pdf 파일 없음. reporter 에이전트를 먼저 실행하세요.")
         return
 
+    # 실제 발송은 명시적 옵트인 필요 — 무동의 콜드메일은 정보통신망법 위반 소지
+    if not dry_run and os.environ.get("SALES_ENABLED", "") != "1":
+        _out("[sales] 실제 발송 비활성화됨 (SALES_ENABLED!=1).")
+        _out("        콜드메일은 사전 동의 없이 발송 시 정보통신망법 위반 소지가 있습니다.")
+        _out("        내용 확인은 --dry-run 으로, 발송 책임을 인지한 경우에만 SALES_ENABLED=1 설정.")
+        return
+
     sent = load_sent(SENT_PATH)
     sent_count = 0
 
     for i, lead in enumerate(leads, 1):
         email = lead["email"]
-        subject = f"[auto.markai] {lead['name']} 마케팅 트렌드 리포트 샘플 드립니다"
+        subject = f"(광고) [auto.markai] {lead['name']} 마케팅 트렌드 리포트 샘플 드립니다"
         body = build_email_body(lead["name"])
 
         if dry_run:

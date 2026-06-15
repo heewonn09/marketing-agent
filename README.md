@@ -138,6 +138,7 @@ ADMIN_PASSWORD_HASH=          # (권장) werkzeug 해시. 설정 시 ADMIN_PASSW
 FORCE_HTTPS=1                 # HTTPS(리버스 프록시) 운영 시 세션 쿠키 Secure
 COOKIE_ENCRYPTION_KEY=        # 미설정 시 data/.enc_key 자동 생성
 POSTER_PROXY=                 # poster 봇 감지 우회용 프록시 (권장: residential)
+SALES_ENABLED=                # sales 콜드메일 실제 발송 허용(=1). 미설정 시 발송 차단(법적 리스크)
 
 # ── 튜닝 (선택, 미설정 시 기본값) ──
 COLLECT_TARGET_COUNT=30       # collector 키워드당 수집 포스트 수
