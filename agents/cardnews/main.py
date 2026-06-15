@@ -46,12 +46,13 @@ Key trends: {", ".join(str(t) for t in trends)}
 Related keywords: {", ".join(kw_list)}
 
 Requirements for each prompt:
-- 4:5 portrait format (Instagram feed optimized)
-- No text, letters, or words in the image
-- Modern, trendy Korean aesthetic
-- Different visual angles: (1) infographic-style flat design, (2) lifestyle scene, (3) abstract/geometric, (4) product/brand mood
+- 3:4 portrait format (Instagram feed optimized)
+- CRITICAL: absolutely no text, no letters, no words, no numbers, no Korean characters, no Latin characters, no symbols of any kind
+- Modern, trendy aesthetic with clean visual communication
+- Different visual angles: (1) flat design with icons/shapes only, (2) lifestyle scene without readable signage, (3) abstract/geometric, (4) product/brand mood
 - Bright, clean, professional look suitable for business marketing
 - High quality, photorealistic or premium illustration style
+- If showing UI/screens, display only blurred or abstract patterns, never readable text
 
 Output ONLY a valid JSON array of 4 strings:
 ["prompt1", "prompt2", "prompt3", "prompt4"]"""
@@ -83,24 +84,30 @@ Output ONLY a valid JSON array of 4 strings:
     return [base, base, base, base]
 
 
-def _generate_image(prompt: str, index: int) -> bytes | None:
-    """Imagen 3으로 이미지 1장 생성 → PNG bytes 반환"""
-    try:
-        response = _client().models.generate_images(
-            model="imagen-3.0-generate-001",
-            prompt=prompt,
-            config=types.GenerateImagesConfig(
-                number_of_images=1,
-                aspect_ratio="4:5",
-                safety_filter_level="BLOCK_LOW_AND_ABOVE",
-                person_generation="DONT_ALLOW",
-            ),
-        )
-        if response.generated_images:
-            return response.generated_images[0].image.image_bytes
-        print(f"  [{index}/4] 이미지 없음 — API 응답 비어있음", file=sys.stderr)
-    except Exception as e:
-        print(f"  [{index}/4] 생성 실패: {e}", file=sys.stderr)
+def _generate_image(prompt: str, index: int, max_retries: int = 3) -> bytes | None:
+    """Imagen 4로 이미지 1장 생성 -> PNG bytes 반환 (빈 응답 시 재시도)"""
+    import time
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = _client().models.generate_images(
+                model="imagen-4.0-generate-001",
+                prompt=prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio="3:4",
+                    safety_filter_level="BLOCK_LOW_AND_ABOVE",
+                    person_generation="ALLOW_ADULT",
+                ),
+            )
+            if response.generated_images:
+                return response.generated_images[0].image.image_bytes
+            print(f"  [{index}/4] empty response (attempt {attempt}/{max_retries}), retrying...")
+            time.sleep(2)
+        except Exception as e:
+            print(f"  [{index}/4] failed (attempt {attempt}/{max_retries}): {e}", file=sys.stderr)
+            if attempt < max_retries:
+                time.sleep(3)
+    print(f"  [{index}/4] failed after {max_retries} attempts", file=sys.stderr)
     return None
 
 
@@ -157,7 +164,7 @@ def main() -> None:
             print(f"  [{i}/4] 건너뜀")
 
     if saved:
-        print(f"[promo-image] 완료 — {len(saved)}장 저장")
+        print(f"[promo-image] 완료 - {len(saved)}장 저장")
     else:
         print("[ERROR] 이미지를 하나도 생성하지 못했습니다.", file=sys.stderr)
         sys.exit(1)
