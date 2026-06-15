@@ -22,6 +22,7 @@ load_dotenv(Path(__file__).parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.job_store import init_db, upsert_job, get_job, list_jobs, get_stats
 from utils.cleanup import cleanup_old_files
+from utils.backup import backup_state
 from utils.notifier import notify_done, notify_error, notify_approval_pending
 from utils.auth_guard import verify_credentials, LoginRateLimiter
 
@@ -558,6 +559,12 @@ def scheduled_run():
 
 
 def _run_cleanup():
+    # 정리 전에 상태 파일 백업 (실수 삭제·손상 대비 복구점)
+    try:
+        copied = backup_state(ROOT)
+        print(f"[backup] 상태 파일 {len(copied)}개 백업: {copied}")
+    except Exception as e:
+        print(f"[backup] 실패: {e}")
     deleted = cleanup_old_files(ROOT)
     if deleted:
         names = [f.name for f in deleted[:5]]
