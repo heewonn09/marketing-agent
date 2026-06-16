@@ -170,3 +170,71 @@ def test_env_admin_still_works(monkeypatch):
         r = c.post("/login", data={"username": "admin", "password": "adminpw"},
                    follow_redirects=False)
     assert r.status_code == 302
+
+
+# ── per-user 잡 격리 ─────────────────────────────────────────────────────────
+import sqlite3 as _sqlite3
+
+
+def test_user_sees_only_own_jobs(monkeypatch):
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    from utils import user_store as _us, job_store as _js
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    db = _a.ROOT / "data" / "jobs.db"
+
+    # 이전 실패 실행 잔여물 정리
+    for name in ("viewer1_iso", "viewer2_iso"):
+        existing = _us.get_user_by_username(name, db_path=db)
+        if existing:
+            _us.delete_user(existing["id"], db_path=db)
+    with _sqlite3.connect(db) as _c:
+        _c.execute("DELETE FROM jobs WHERE job_id IN ('job-iso-v1','job-iso-v2')")
+
+    uid1 = _us.create_user("viewer1_iso", _gph("pw1"), db_path=db)
+    uid2 = _us.create_user("viewer2_iso", _gph("pw2"), db_path=db)
+    _js.upsert_job("job-iso-v1", "done", ["kw1"], "2026-06-17", user_id=uid1)
+    _js.upsert_job("job-iso-v2", "done", ["kw2"], "2026-06-17", user_id=uid2)
+
+    with _a.app.test_client() as c:
+        c.post("/login", data={"username": "viewer1_iso", "password": "pw1"})
+        r = c.get("/history")
+        data = _json2.loads(r.data)
+        job_ids = [j["job_id"] for j in data["items"]]
+        assert "job-iso-v1" in job_ids
+        assert "job-iso-v2" not in job_ids
+
+    for uid in [uid1, uid2]:
+        _us.delete_user(uid, db_path=db)
+    with _sqlite3.connect(db) as conn:
+        conn.execute("DELETE FROM jobs WHERE job_id IN ('job-iso-v1','job-iso-v2')")
+
+
+def test_admin_sees_all_jobs(monkeypatch):
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    from utils import user_store as _us, job_store as _js
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    db = _a.ROOT / "data" / "jobs.db"
+
+    uid = _us.create_user("other_user_adm", _gph("pw"), db_path=db)
+    _js.upsert_job("job-admin-view", "done", ["kw"], "2026-06-17", user_id=uid)
+
+    with _a.app.test_client() as c:
+        c.post("/login", data={"username": "admin", "password": "adminpw"})
+        r = c.get("/history")
+        data = _json2.loads(r.data)
+        job_ids = [j["job_id"] for j in data["items"]]
+        assert "job-admin-view" in job_ids
+
+    _us.delete_user(uid, db_path=db)
+    with _sqlite3.connect(db) as conn:
+        conn.execute("DELETE FROM jobs WHERE job_id='job-admin-view'")

@@ -220,7 +220,8 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
 
 
 def _run_pipeline_part2(job_id: str, keywords: list[str], today: str,
-                        post_blog: bool = True, post_instagram: bool = True) -> None:
+                        post_blog: bool = True, post_instagram: bool = True,
+                        user_id: int | None = None) -> None:
     """포스팅 + 인스타그램 (승인 후 실행)"""
     if post_blog:
         for keyword in keywords:
@@ -249,12 +250,13 @@ def _run_pipeline_part2(job_id: str, keywords: list[str], today: str,
     jobs[job_id]["date"] = today
     duration = int(time.time() - jobs[job_id].get("started_at", time.time()))
     jobs[job_id]["duration_seconds"] = duration
+    _uid = user_id if user_id is not None else jobs[job_id].get("user_id")
     upsert_job(
         job_id, "done", keywords, today,
         naver_post_url=jobs[job_id].get("naver_post_url"),
         instagram_media_id=jobs[job_id].get("instagram_media_id"),
         instagram_permalink=jobs[job_id].get("instagram_permalink"),
-        duration_seconds=duration,
+        duration_seconds=duration, user_id=_uid,
     )
     jobs[job_id]["queue"].put(f"DONE:{today}")
     base_url = os.environ.get("CARDNEWS_BASE_URL", "")
@@ -275,7 +277,8 @@ def _run_per_keyword(job_id: str, keyword: str, fatal: bool = True) -> bool:
 
 
 def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False,
-                 post_blog: bool = True, post_instagram: bool = True) -> None:
+                 post_blog: bool = True, post_instagram: bool = True,
+                 user_id: int | None = None) -> None:
     import concurrent.futures
     today = date.today().isoformat()
 
@@ -320,12 +323,12 @@ def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False,
                 jobs[job_id]["queue"].put("LOG:[cardnews] 카드뉴스 생성 실패 — 다음 스텝 계속 진행.")
 
     if auto_post:
-        _run_pipeline_part2(job_id, keywords, today, post_blog, post_instagram)
+        _run_pipeline_part2(job_id, keywords, today, post_blog, post_instagram, user_id=user_id)
     else:
         # 승인 대기 — 프론트엔드가 /approve/<job_id>를 호출할 때까지 큐 유지
         jobs[job_id]["status"] = "pending_approval"
         jobs[job_id]["date"] = today
-        upsert_job(job_id, "pending_approval", keywords, today)
+        upsert_job(job_id, "pending_approval", keywords, today, user_id=user_id)
         jobs[job_id]["queue"].put(f"PENDING:{today}")
         # 승인 대기 알림 (이메일 + 슬랙)
         base_url = os.environ.get("CARDNEWS_BASE_URL", "")
@@ -378,14 +381,18 @@ def run():
 
     _prune_jobs()  # 종료된 옛 잡 정리 (메모리 누수 방지)
     job_id = uuid.uuid4().hex[:8]
+    uid = session.get("user_id")
     jobs[job_id] = {
         "status": "running", "queue": queue.Queue(), "date": None,
         "keywords": keywords, "last_step": None,
-        "started_at": time.time(),
+        "started_at": time.time(), "user_id": uid,
         "naver_post_url": None, "instagram_media_id": None, "instagram_permalink": None,
     }
-    upsert_job(job_id, "running", keywords)
-    threading.Thread(target=run_pipeline, args=(job_id, keywords), daemon=True).start()
+    upsert_job(job_id, "running", keywords, user_id=uid)
+    threading.Thread(
+        target=run_pipeline, args=(job_id, keywords),
+        kwargs={"user_id": uid}, daemon=True,
+    ).start()
     return jsonify({"job_id": job_id})
 
 
@@ -446,9 +453,13 @@ def approve(job_id: str):
 
     keywords = job_info.get("keywords", [])
     today = job_info.get("date") or date.today().isoformat()
+    uid = job_info.get("user_id")
     jobs[job_id]["status"] = "posting"
-    upsert_job(job_id, "posting", keywords, today)
-    threading.Thread(target=_run_pipeline_part2, args=(job_id, keywords, today), daemon=True).start()
+    upsert_job(job_id, "posting", keywords, today, user_id=uid)
+    threading.Thread(
+        target=_run_pipeline_part2, args=(job_id, keywords, today),
+        kwargs={"user_id": uid}, daemon=True,
+    ).start()
     return jsonify({"ok": True})
 
 
@@ -508,8 +519,10 @@ def history():
     q        = request.args.get("q", "")
     from_d   = request.args.get("from", "")
     to_d     = request.args.get("to", "")
+    role = session.get("role", "user")
+    uid  = None if role == "admin" else session.get("user_id")
     result   = list_jobs(page=page, per_page=per_page, status=status, q=q,
-                         from_date=from_d, to_date=to_d)
+                         from_date=from_d, to_date=to_d, user_id=uid)
     return jsonify(result)
 
 
