@@ -1,4 +1,5 @@
 import base64
+import hmac
 import json as _json
 import os
 import queue
@@ -71,8 +72,9 @@ app.config.update(
 ADMIN_USER = os.environ.get("ADMIN_USER", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
+API_KEY = os.environ.get("API_KEY", "").strip()
 
-_AUTH_EXEMPT_PREFIXES = ("/stream/", "/cardnews/")
+_AUTH_EXEMPT_PREFIXES = ("/stream/", "/cardnews/", "/share/")
 _AUTH_EXEMPT_PATHS = ("/login",)
 
 _rate_limiter = LoginRateLimiter(max_attempts=5, window=300, lockout=900)
@@ -100,22 +102,17 @@ def _require_auth():
         return
     if session.get("authenticated"):
         return
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Basic "):
-        if _rate_limiter.is_locked(request.remote_addr or "?"):
-            return Response("로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요.", 429)
-        try:
-            user, pwd = base64.b64decode(auth[6:]).decode().split(":", 1)
-            if _check_credentials(user, pwd):
-                _rate_limiter.register_success(request.remote_addr or "?")
-                return
-            _rate_limiter.register_failure(request.remote_addr or "?")
-        except Exception:
-            pass
+    # X-API-Key 헤더 — 프로그래밍 접근용 (Basic Auth 대체)
+    req_api_key = request.headers.get("X-API-Key", "").strip()
+    if req_api_key and API_KEY and hmac.compare_digest(
+        req_api_key.encode(), API_KEY.encode()
+    ):
+        return
+    # 브라우저: 로그인 페이지로 리디렉트
     if "text/html" in request.headers.get("Accept", ""):
         return redirect(url_for("login", next=request.path))
-    return Response("인증이 필요합니다", 401,
-                    {"WWW-Authenticate": 'Basic realm="Marketing Agent"'})
+    # API 클라이언트: 401 (WWW-Authenticate 헤더 없이 — Basic Auth 팝업 방지)
+    return Response("인증이 필요합니다. X-API-Key 헤더를 사용하세요.", 401)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -553,6 +550,46 @@ def download(report_date: str):
                      download_name=f"marketing_report_{report_date}.pdf")
 
 
+@app.route("/share/<job_id>")
+def share(job_id: str):
+    """인증 없이 접근 가능한 읽기 전용 공유 링크.
+
+    job_id에 해당하는 잡 정보 + 생성된 콘텐츠 요약을 반환.
+    콘텐츠 파일이 없으면 메타 정보만 반환.
+    """
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"error": "공유 링크를 찾을 수 없습니다"}), 404
+
+    result = {
+        "job_id": job_id,
+        "status": job.get("status"),
+        "date": job.get("date"),
+        "keywords": job.get("keywords", []),
+        "contents": [],
+    }
+
+    for keyword in job.get("keywords", []):
+        safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+        report_date = job.get("date") or ""
+        content_path = ROOT / "output" / f"content_{safe_kw}_{report_date}.json"
+        entry: dict = {"keyword": keyword}
+        if content_path.exists():
+            with open(content_path, encoding="utf-8") as f:
+                content = _json.load(f)
+            entry["naver_blog_title"] = content.get("naver_blog", {}).get("title", "")
+            entry["instagram_caption"] = content.get("instagram", {}).get("caption", "")[:100]
+            entry["ad_headline"] = content.get("ad_copy", {}).get("headline", "")
+            entry["cardnews"] = [
+                f"/cardnews/cardnews_{safe_kw}_{report_date}_{i}.png"
+                for i in range(1, 5)
+                if (ROOT / "output" / f"cardnews_{safe_kw}_{report_date}_{i}.png").exists()
+            ]
+        result["contents"].append(entry)
+
+    return jsonify(result)
+
+
 # ── /schedules CRUD ────────────────────────────────────────────────────────
 
 @app.route("/schedules", methods=["GET"])
@@ -678,14 +715,72 @@ def _run_cleanup():
         print("[cleanup] 삭제 대상 없음")
 
 
+def _refresh_ig_token_job() -> None:
+    """Instagram 액세스 토큰 주간 갱신 — 60일 만료 방지.
+
+    INSTAGRAM_ACCESS_TOKEN 미설정 시 건너뜀.
+    갱신 실패 시 notify_error로 알림.
+    """
+    import requests as _req
+    access_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "").strip()
+    if not access_token:
+        print("[ig-token] INSTAGRAM_ACCESS_TOKEN 미설정 - 건너뜀")
+        return
+    try:
+        res = _req.get(
+            "https://graph.instagram.com/refresh_access_token",
+            params={"grant_type": "ig_refresh_token", "access_token": access_token},
+            timeout=15,
+        )
+        if not res.ok:
+            msg = f"토큰 갱신 실패 {res.status_code}: {res.text[:120]}"
+            print(f"[ig-token] {msg}")
+            threading.Thread(
+                target=notify_error, args=([], "Instagram 토큰 갱신", msg), daemon=True
+            ).start()
+            return
+        data = res.json()
+        new_token = data.get("access_token", "")
+        days = data.get("expires_in", 0) // 86400
+        print(f"[ig-token] 갱신 완료 - 만료까지 {days}일")
+        if new_token and new_token != access_token:
+            env_path = ROOT / ".env"
+            if env_path.exists():
+                text = env_path.read_text(encoding="utf-8")
+                import re as _re2
+                text = _re2.sub(
+                    r"^INSTAGRAM_ACCESS_TOKEN=.*$",
+                    f"INSTAGRAM_ACCESS_TOKEN={new_token}",
+                    text,
+                    flags=_re2.MULTILINE,
+                )
+                env_path.write_text(text, encoding="utf-8")
+            os.environ["INSTAGRAM_ACCESS_TOKEN"] = new_token
+            print("[ig-token] .env 토큰 업데이트 완료")
+    except Exception as e:
+        msg = f"토큰 갱신 예외: {e}"
+        print(f"[ig-token] {msg}")
+        threading.Thread(
+            target=notify_error, args=([], "Instagram 토큰 갱신", msg), daemon=True
+        ).start()
+
+
 scheduler = BackgroundScheduler(timezone="Asia/Seoul")
 scheduler.add_job(_run_cleanup, CronTrigger(hour=2, minute=0, timezone="Asia/Seoul"))
+scheduler.add_job(
+    _refresh_ig_token_job,
+    CronTrigger(day_of_week="sun", hour=3, minute=0, timezone="Asia/Seoul"),
+    id="ig_token_refresh",
+    replace_existing=True,
+)
 # 기존 매일 09:00 scheduled_run 잡은 제거 (웹 스케줄로 대체)
 
 if os.environ.get("DISABLE_SCHEDULER") != "1":
     for _s in list_schedules():
         if _s["enabled"]:
             _apply_schedule(_s)
+    # 서버 시작 시 IG 토큰 상태 선제 갱신
+    threading.Thread(target=_refresh_ig_token_job, daemon=True).start()
     scheduler.start()
 
 
