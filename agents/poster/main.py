@@ -497,8 +497,11 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
     print(f"  본문 HTML 삽입 완료 (result={result})")
     time.sleep(1)
 
-    # 발행 전 스크린샷 (디버깅)
-    page.screenshot(path=str(_ROOT / "data" / "poster_before_publish.png"))
+    # 발행 전 스크린샷 (디버깅) — 폰트 로딩 대기 실패 무시
+    try:
+        page.screenshot(path=str(_ROOT / "data" / "poster_before_publish.png"), timeout=10000)
+    except Exception:
+        pass
 
     # ── 발행 버튼 ──────────────────────────────────────────────────
     print("발행 버튼 클릭...")
