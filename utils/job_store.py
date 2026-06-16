@@ -49,6 +49,8 @@ def init_db(db_path: Path) -> None:
             "ALTER TABLE jobs ADD COLUMN instagram_permalink TEXT",
             "ALTER TABLE jobs ADD COLUMN duration_seconds INTEGER",
             "ALTER TABLE jobs ADD COLUMN error_message TEXT",
+            "ALTER TABLE jobs ADD COLUMN user_id INTEGER",
+            "ALTER TABLE schedules ADD COLUMN user_id INTEGER",
         ]:
             try:
                 conn.execute(col_def)
@@ -68,29 +70,34 @@ def upsert_job(
     instagram_permalink: str | None = None,
     duration_seconds: int | None = None,
     error_message: str | None = None,
+    user_id: int | None = None,
 ) -> None:
     path = db_path or _DEFAULT_DB
     now = datetime.now().isoformat()
     with sqlite3.connect(path) as conn:
         existing = conn.execute(
-            "SELECT created_at, keywords, date, naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message FROM jobs WHERE job_id = ?",
+            "SELECT created_at, keywords, date, naver_post_url, instagram_media_id, "
+            "instagram_permalink, duration_seconds, error_message, user_id FROM jobs WHERE job_id = ?",
             (job_id,)
         ).fetchone()
-        created_at             = existing[0] if existing else now
-        final_keywords         = json.dumps(keywords) if keywords is not None else (existing[1] if existing else "[]")
-        final_date             = date if date is not None else (existing[2] if existing else None)
-        final_naver_url        = naver_post_url if naver_post_url is not None else (existing[3] if existing else None)
-        final_ig_media_id      = instagram_media_id if instagram_media_id is not None else (existing[4] if existing else None)
-        final_ig_permalink     = instagram_permalink if instagram_permalink is not None else (existing[5] if existing else None)
-        final_duration         = duration_seconds if duration_seconds is not None else (existing[6] if existing else None)
-        final_error_msg        = error_message if error_message is not None else (existing[7] if existing else None)
+        created_at         = existing[0] if existing else now
+        final_keywords     = json.dumps(keywords) if keywords is not None else (existing[1] if existing else "[]")
+        final_date         = date if date is not None else (existing[2] if existing else None)
+        final_naver_url    = naver_post_url if naver_post_url is not None else (existing[3] if existing else None)
+        final_ig_media_id  = instagram_media_id if instagram_media_id is not None else (existing[4] if existing else None)
+        final_ig_permalink = instagram_permalink if instagram_permalink is not None else (existing[5] if existing else None)
+        final_duration     = duration_seconds if duration_seconds is not None else (existing[6] if existing else None)
+        final_error_msg    = error_message if error_message is not None else (existing[7] if existing else None)
+        final_user_id      = user_id if user_id is not None else (existing[8] if existing else None)
         conn.execute(
             """INSERT OR REPLACE INTO jobs
                (job_id, status, keywords, date, created_at, updated_at,
-                naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                naver_post_url, instagram_media_id, instagram_permalink,
+                duration_seconds, error_message, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (job_id, status, final_keywords, final_date, created_at, now,
-             final_naver_url, final_ig_media_id, final_ig_permalink, final_duration, final_error_msg),
+             final_naver_url, final_ig_media_id, final_ig_permalink,
+             final_duration, final_error_msg, final_user_id),
         )
 
 
@@ -98,7 +105,8 @@ def get_job(job_id: str, db_path: Path | None = None) -> dict | None:
     path = db_path or _DEFAULT_DB
     with sqlite3.connect(path) as conn:
         row = conn.execute(
-            "SELECT job_id, status, keywords, date, naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message FROM jobs WHERE job_id = ?",
+            "SELECT job_id, status, keywords, date, naver_post_url, instagram_media_id, "
+            "instagram_permalink, duration_seconds, error_message, user_id FROM jobs WHERE job_id = ?",
             (job_id,),
         ).fetchone()
     if not row:
@@ -113,6 +121,7 @@ def get_job(job_id: str, db_path: Path | None = None) -> dict | None:
         "instagram_permalink": row[6],
         "duration_seconds": row[7],
         "error_message": row[8],
+        "user_id": row[9],
     }
 
 
@@ -124,9 +133,11 @@ def list_jobs(
     from_date: str = "",
     to_date: str = "",
     db_path: Path | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """페이지네이션·필터 지원 목록 반환.
 
+    user_id=None 이면 전체(admin), user_id 지정 시 해당 사용자 잡만 반환.
     반환 형식: {"items": [...], "total": N, "page": N, "pages": N}
     """
     path = db_path or _DEFAULT_DB
@@ -145,6 +156,9 @@ def list_jobs(
     if to_date:
         where_clauses.append("created_at <= ?")
         params.append(to_date + "T23:59:59")
+    if user_id is not None:
+        where_clauses.append("user_id = ?")
+        params.append(user_id)
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -156,7 +170,8 @@ def list_jobs(
         offset = (page - 1) * per_page
         rows = conn.execute(
             f"SELECT job_id, status, keywords, date, created_at, "
-            f"naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message "
+            f"naver_post_url, instagram_media_id, instagram_permalink, "
+            f"duration_seconds, error_message, user_id "
             f"FROM jobs {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?",
             params + [per_page, offset],
         ).fetchall()
@@ -174,6 +189,7 @@ def list_jobs(
             "instagram_permalink": row[7],
             "duration_seconds": row[8],
             "error_message": row[9],
+            "user_id": row[10],
         }
         for row in rows
     ]
