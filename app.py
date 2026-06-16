@@ -575,9 +575,11 @@ def _run_cleanup():
 
 
 scheduler = BackgroundScheduler(timezone="Asia/Seoul")
-scheduler.add_job(scheduled_run, CronTrigger(hour=9, minute=0))
 scheduler.add_job(_run_cleanup, CronTrigger(hour=2, minute=0, timezone="Asia/Seoul"))
-scheduler.start()
+# 기존 매일 09:00 scheduled_run 잡은 제거 (웹 스케줄로 대체)
+
+if os.environ.get("DISABLE_SCHEDULER") != "1":
+    scheduler.start()
 
 
 if __name__ == "__main__":
