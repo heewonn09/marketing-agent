@@ -32,3 +32,29 @@ def test_part2_ig_only(monkeypatch):
     a._run_pipeline_part2("j2", ["k"], "2026-06-16", post_blog=False, post_instagram=True)
     assert any("instagram" in s for s in ran)
     assert not any("poster" in s for s in ran)
+
+
+def _client(monkeypatch, tmp_path=None):
+    monkeypatch.setattr(a, "ADMIN_USER", "")
+    a.app.config["TESTING"] = True
+    return a.app.test_client()
+
+
+def test_create_and_list_schedule(monkeypatch, tmp_path):
+    monkeypatch.setattr(a, "_apply_schedule", lambda s: None)
+    monkeypatch.setattr(a, "_unschedule", lambda i: None)
+    c = _client(monkeypatch, tmp_path)
+    r = c.post("/schedules", json={"name": "t", "keywords": ["AI 마케팅"], "days": ["mon"],
+                                   "hour": 9, "minute": 0, "post_blog": True, "post_instagram": False})
+    assert r.status_code == 200
+    sid = r.get_json()["id"]
+    lst = c.get("/schedules").get_json()
+    assert any(s["id"] == sid for s in lst)
+
+
+def test_create_rejects_invalid(monkeypatch, tmp_path):
+    monkeypatch.setattr(a, "_apply_schedule", lambda s: None)
+    c = _client(monkeypatch, tmp_path)
+    r = c.post("/schedules", json={"keywords": [], "days": ["mon"], "hour": 9, "minute": 0,
+                                   "post_blog": False, "post_instagram": False})
+    assert r.status_code == 400

@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from utils.job_store import (init_db, upsert_job, get_job, list_jobs, get_stats,
                              create_schedule, get_schedule, list_schedules,
                              update_schedule, delete_schedule)
+from utils.schedule_util import validate_schedule, normalize_days
 from utils.cleanup import cleanup_old_files
 from utils.backup import backup_state
 from utils.notifier import notify_done, notify_error, notify_approval_pending
@@ -542,6 +543,76 @@ def download(report_date: str):
         return "PDF를 찾을 수 없습니다", 404
     return send_file(str(pdf_path), as_attachment=True,
                      download_name=f"marketing_report_{report_date}.pdf")
+
+
+# ── /schedules CRUD ────────────────────────────────────────────────────────
+
+@app.route("/schedules", methods=["GET"])
+def schedules_list():
+    out = []
+    for s in list_schedules():
+        job = scheduler.get_job(f"sched_{s['id']}")
+        s = dict(s)
+        s["next_run"] = job.next_run_time.isoformat() if (job and job.next_run_time) else None
+        out.append(s)
+    return jsonify(out)
+
+
+@app.route("/schedules", methods=["POST"])
+def schedules_create():
+    data = request.get_json(silent=True) or {}
+    ok, err = validate_schedule(data)
+    if not ok:
+        return jsonify({"error": err}), 400
+    sid = create_schedule(
+        name=data.get("name", ""), keywords=[k.strip() for k in data["keywords"] if str(k).strip()],
+        days=normalize_days(data["days"]), hour=data["hour"], minute=data["minute"],
+        post_blog=bool(data["post_blog"]), post_instagram=bool(data["post_instagram"]),
+        enabled=bool(data.get("enabled", True)))
+    sched = get_schedule(sid)
+    if sched["enabled"]:
+        _apply_schedule(sched)
+    return jsonify({"id": sid})
+
+
+@app.route("/schedules/<int:sid>", methods=["PUT"])
+def schedules_update(sid):
+    if not get_schedule(sid):
+        return jsonify({"error": "없는 스케줄"}), 404
+    data = request.get_json(silent=True) or {}
+    ok, err = validate_schedule(data)
+    if not ok:
+        return jsonify({"error": err}), 400
+    update_schedule(sid, name=data.get("name", ""),
+                    keywords=[k.strip() for k in data["keywords"] if str(k).strip()],
+                    days=normalize_days(data["days"]), hour=data["hour"], minute=data["minute"],
+                    post_blog=bool(data["post_blog"]), post_instagram=bool(data["post_instagram"]),
+                    enabled=bool(data.get("enabled", True)))
+    sched = get_schedule(sid)
+    _unschedule(sid)
+    if sched["enabled"]:
+        _apply_schedule(sched)
+    return jsonify({"ok": True})
+
+
+@app.route("/schedules/<int:sid>", methods=["DELETE"])
+def schedules_delete(sid):
+    _unschedule(sid)
+    delete_schedule(sid)
+    return jsonify({"ok": True})
+
+
+@app.route("/schedules/<int:sid>/toggle", methods=["POST"])
+def schedules_toggle(sid):
+    s = get_schedule(sid)
+    if not s:
+        return jsonify({"error": "없는 스케줄"}), 404
+    new_enabled = not s["enabled"]
+    update_schedule(sid, enabled=new_enabled)
+    _unschedule(sid)
+    if new_enabled:
+        _apply_schedule(get_schedule(sid))
+    return jsonify({"enabled": new_enabled})
 
 
 # ── 스케줄러 ───────────────────────────────────────────────────────────────
