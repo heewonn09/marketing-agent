@@ -512,8 +512,8 @@
         /* 예약 폼 모달 */
         .sched-modal-overlay {
             display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.45); z-index: 1000;
-            align-items: center; justify-content: center; padding: 16px;
+            background: rgba(0,0,0,0.58); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+            z-index: 1000; align-items: center; justify-content: center; padding: 16px;
         }
         .sched-modal-overlay.open { display: flex; }
         .sched-modal {
@@ -533,15 +533,17 @@
         }
         .sf-input:focus { border-color: #667eea; }
         .sf-select { padding: 8px 11px; border: 1.5px solid #e2e8f0; border-radius: 7px; font-size: 13px; font-family: inherit; background: white; cursor: pointer; }
-        .day-checks { display: flex; gap: 4px; flex-wrap: wrap; }
+        /* 요일 토글 버튼 3-state */
+        .day-checks { display: flex; gap: 5px; flex-wrap: wrap; }
         .day-checks label {
-            display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;
-            padding: 5px 9px; border-radius: 7px; border: 1.5px solid #e2e8f0;
+            display: flex; align-items: center; font-size: 13px; font-weight: 600; cursor: pointer;
+            padding: 6px 11px; border-radius: 8px;
+            border: 1.5px solid #e2e8f0; background: #f7fafc; color: #a0aec0;
             transition: all 0.15s; user-select: none;
         }
-        .day-checks label:hover { border-color: #667eea; color: #667eea; }
-        .day-checks input[type=checkbox] { display: none; }
-        .day-checks label.checked { background: #667eea; color: white; border-color: #667eea; font-weight: 700; }
+        .day-checks label:hover:not(.checked) { border-color: #a78bfa; color: #7c3aed; background: #f5f3ff; }
+        .day-checks label.checked { background: #667eea; color: white; border-color: #667eea; box-shadow: 0 2px 6px rgba(102,126,234,0.35); }
+        /* 채널 체크박스 */
         .sf-channel-checks { display: flex; gap: 8px; flex-wrap: wrap; }
         .sf-channel-checks label {
             display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;
@@ -550,6 +552,22 @@
         }
         .sf-channel-checks label:hover { border-color: #667eea; }
         .sf-channel-checks input[type=checkbox] { accent-color: #667eea; width: 15px; height: 15px; cursor: pointer; }
+        /* 활성화 토글 스위치 */
+        .sf-toggle { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+        .sf-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .sf-toggle-slider {
+            position: absolute; cursor: pointer; inset: 0;
+            background: #e2e8f0; border-radius: 22px; transition: .2s;
+        }
+        .sf-toggle-slider::before {
+            content: ''; position: absolute;
+            height: 16px; width: 16px; left: 3px; bottom: 3px;
+            background: white; border-radius: 50%; transition: .2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .sf-toggle input:checked + .sf-toggle-slider { background: #667eea; }
+        .sf-toggle input:checked + .sf-toggle-slider::before { transform: translateX(16px); }
+        .sf-enabled-label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #718096; }
         .sf-btn-group { display: flex; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #edf2f7; }
     </style>
 </head>
@@ -710,16 +728,25 @@
         <div class="sched-modal">
             <div class="sched-modal-header">
                 <div class="sched-modal-title" id="sched-modal-title">새 예약 추가</div>
-                <button class="sched-modal-close" onclick="closeSchedForm()">✕</button>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <label class="sf-enabled-label" title="이 예약을 활성화할지 여부">
+                        <label class="sf-toggle">
+                            <input type="checkbox" id="sf-enabled" checked>
+                            <span class="sf-toggle-slider"></span>
+                        </label>
+                        활성화
+                    </label>
+                    <button class="sched-modal-close" onclick="closeSchedForm()">✕</button>
+                </div>
             </div>
             <input type="hidden" id="sf-id" value="">
             <div class="sf-row">
-                <span class="sf-label">이름</span>
-                <input class="sf-input" id="sf-name" placeholder="예약 이름 (선택)" style="flex:1">
+                <span class="sf-label">이름 <span style="font-weight:400;color:#cbd5e0">(선택)</span></span>
+                <input class="sf-input" id="sf-name" placeholder="예: 블로그 주간 브랜딩" style="flex:1">
             </div>
             <div class="sf-row">
                 <span class="sf-label">키워드</span>
-                <input class="sf-input" id="sf-keywords" placeholder="키워드1, 키워드2" style="flex:1">
+                <input class="sf-input" id="sf-keywords" placeholder="AI 마케팅, 디지털 트렌드" style="flex:1">
             </div>
             <div class="sf-row" style="align-items:flex-start">
                 <span class="sf-label" style="padding-top:6px">요일</span>
@@ -751,11 +778,6 @@
                     <label><input type="checkbox" id="sf-blog" checked> 블로그</label>
                     <label><input type="checkbox" id="sf-ig"> 인스타그램</label>
                 </div>
-            </div>
-            <div class="sf-row">
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-                    <input type="checkbox" id="sf-enabled" checked style="accent-color:#667eea;width:15px;height:15px"> 활성화
-                </label>
             </div>
             <div class="sf-btn-group">
                 <button class="btn-run" style="font-size:13px;padding:9px 22px;flex:1" onclick="saveSchedule()">저장</button>
