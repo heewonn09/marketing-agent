@@ -462,9 +462,18 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
             if not naver_pw:
                 raise RuntimeError("세션 만료 — .env에 NAVER_PW 필요")
             _do_login(page, naver_id, naver_pw)
+            print(f"재로그인 후 현재 URL: {page.url}")
+            # 보안인증·기기확인 페이지 감지
+            if any(k in page.url for k in ("safeguard", "device", "challenge", "captcha", "protect")):
+                page.screenshot(path=str(ROOT / "data" / "poster_security_check.png"))
+                raise RuntimeError(
+                    f"네이버 보안 인증 페이지 감지 ({page.url}). "
+                    "로컬에서 --manual-login으로 쿠키를 갱신 후 서버에 업로드하세요."
+                )
             print("재로그인 후 에디터 재접속...")
             time.sleep(3.0)  # 로그인 처리 완전 완료 대기
             page.goto(editor_url, wait_until="domcontentloaded", timeout=30000)
+            print(f"에디터 접속 후 URL: {page.url}")
             time.sleep(2.0)  # 에디터 React 초기화 시간 확보
 
     _goto_editor()
@@ -475,7 +484,15 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
     time.sleep(1.5)
 
     # 에디터 완전 로딩 대기 (재로그인 후 React 초기화 시간 확보)
-    page.wait_for_selector(".se-container", timeout=60000)
+    print(f"에디터 로딩 대기 중... (현재 URL: {page.url})")
+    try:
+        page.wait_for_selector(".se-container", timeout=60000)
+    except Exception:
+        page.screenshot(path=str(ROOT / "data" / "poster_error.png"))
+        raise RuntimeError(
+            f".se-container 로딩 실패. 현재 URL: {page.url}\n"
+            "data/poster_error.png 스크린샷을 확인하세요."
+        )
     time.sleep(2.0)
 
     # 팝업 재확인 (se-container 로딩 후 새로 뜨는 팝업 처리)

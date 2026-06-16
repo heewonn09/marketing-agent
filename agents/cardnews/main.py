@@ -156,15 +156,15 @@ def _apply_overlay(img_bytes: bytes, slide_idx: int,
                           _font(SZ_LABEL, "bold"), ACCENT_AMBER) + LINE_GAP
         _shadow_text(draw, PAD, y, keyword, _font(SZ_TITLE, "bold"), WHITE)
 
-        # 하단: 트렌드 3개
+        # 하단: 트렌드 핵심 키워드 1줄씩 (상세 내용은 인스타 캡션에)
         trends = [str(t) for t in data.get("trends", [])[:3]]
         y_b = H - BANNER_H + PAD // 2
         for t in trends:
-            lines = _wrap_korean(draw, f"• {t}", _font(SZ_BODY, "regular"), W - PAD * 2)[:2]
-            for line in lines:
-                y_b += _shadow_text(draw, PAD, y_b, line,
-                                    _font(SZ_BODY, "regular"), WHITE) + LINE_GAP // 2
-            y_b += LINE_GAP
+            short = t.split(".")[0].split("：")[0].split(":")[0].strip()
+            if len(short) > 24:
+                short = short[:23] + "…"
+            y_b += _shadow_text(draw, PAD, y_b, f"• {short}",
+                                _font(SZ_BODY, "bold"), WHITE) + LINE_GAP
 
     # ────────────────────────────────────────────────────────────────────────
     # 슬라이드 3 — 핵심 인사이트
@@ -176,15 +176,15 @@ def _apply_overlay(img_bytes: bytes, slide_idx: int,
                           _font(SZ_LABEL, "bold"), ACCENT_BLUE) + LINE_GAP
         _shadow_text(draw, PAD, y, keyword, _font(SZ_TITLE, "bold"), WHITE)
 
-        # 하단: 인사이트 2개 (각 최대 2줄)
-        insights = [str(ins) for ins in data.get("insights", [])[:2]]
+        # 하단: 인사이트 핵심 문구 1줄씩 (상세 내용은 인스타 캡션에)
+        insights = [str(ins) for ins in data.get("insights", [])[:3]]
         y_b = H - BANNER_H + PAD // 2
         for ins in insights:
-            lines = _wrap_korean(draw, f"▶  {ins}", _font(SZ_BODY, "regular"), W - PAD * 2)[:2]
-            for line in lines:
-                y_b += _shadow_text(draw, PAD, y_b, line,
-                                    _font(SZ_BODY, "regular"), WHITE) + LINE_GAP // 2
-            y_b += LINE_GAP
+            short = ins.split(".")[0].split("：")[0].split(":")[0].strip()
+            if len(short) > 24:
+                short = short[:23] + "…"
+            y_b += _shadow_text(draw, PAD, y_b, f"▶  {short}",
+                                _font(SZ_BODY, "bold"), WHITE) + LINE_GAP
 
     # ────────────────────────────────────────────────────────────────────────
     # 슬라이드 4 — CTA (팔로우 유도)
