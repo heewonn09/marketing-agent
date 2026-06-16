@@ -118,3 +118,55 @@ def test_rate_limiter_success_resets():
     rl.register_success("ip")
     rl.register_failure("ip", now=1)
     assert rl.is_locked("ip", now=2) is False
+
+
+# ── 멀티유저 로그인 ──────────────────────────────────────────────────────────
+import json as _json2
+import os as _os3
+from werkzeug.security import generate_password_hash as _gph
+
+
+def test_db_user_can_login(monkeypatch):
+    from utils import user_store as _us
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    db = _a.ROOT / "data" / "jobs.db"
+    uid = _us.create_user("testuser_login", _gph("testpw"), db_path=db)
+    with _a.app.test_client() as c:
+        r = c.post("/login", data={"username": "testuser_login", "password": "testpw"},
+                   follow_redirects=False)
+        assert r.status_code == 302
+    _us.delete_user(uid, db_path=db)
+
+
+def test_wrong_password_returns_login_form(monkeypatch):
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    with _a.app.test_client() as c:
+        r = c.post("/login", data={"username": "admin", "password": "wrongpw"},
+                   follow_redirects=False)
+    assert r.status_code == 200
+
+
+def test_env_admin_still_works(monkeypatch):
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    with _a.app.test_client() as c:
+        r = c.post("/login", data={"username": "admin", "password": "adminpw"},
+                   follow_redirects=False)
+    assert r.status_code == 302

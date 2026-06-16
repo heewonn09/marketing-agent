@@ -6,11 +6,12 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash
 
-from utils.job_store import _DEFAULT_DB
-
 
 def _path(db_path: Path | None) -> Path:
-    return db_path or _DEFAULT_DB
+    if db_path is not None:
+        return db_path
+    from utils.job_store import _DEFAULT_DB  # 런타임 참조 (init_db 이후 값)
+    return _DEFAULT_DB
 
 
 def init_users(db_path: Path | None = None) -> None:

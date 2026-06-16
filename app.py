@@ -29,6 +29,9 @@ from utils.cleanup import cleanup_old_files
 from utils.backup import backup_state
 from utils.notifier import notify_done, notify_error, notify_approval_pending
 from utils.auth_guard import verify_credentials, LoginRateLimiter
+from utils.user_store import (init_users, upsert_admin, verify_user,
+                               create_user, get_user_by_id, get_user_by_username,
+                               list_users, update_user, delete_user)
 
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
@@ -82,6 +85,13 @@ _rate_limiter = LoginRateLimiter(max_attempts=5, window=300, lockout=900)
 jobs: dict[str, dict] = {}
 
 init_db(ROOT / "data" / "jobs.db")
+init_users()  # users 테이블 생성 (_DEFAULT_DB 사용)
+
+# env var 관리자 → DB 자동 동기화 (하위 호환)
+if ADMIN_USER and (ADMIN_PASSWORD or ADMIN_PASSWORD_HASH):
+    from werkzeug.security import generate_password_hash as _gph
+    _admin_hash = ADMIN_PASSWORD_HASH or _gph(ADMIN_PASSWORD)
+    upsert_admin(ADMIN_USER, _admin_hash)
 
 
 def _auth_enabled() -> bool:
@@ -100,7 +110,7 @@ def _require_auth():
         return
     if any(request.path.startswith(p) for p in _AUTH_EXEMPT_PREFIXES):
         return
-    if session.get("authenticated"):
+    if session.get("user_id") is not None:
         return
     # X-API-Key 헤더 — 프로그래밍 접근용 (Basic Auth 대체)
     req_api_key = request.headers.get("X-API-Key", "").strip()
@@ -123,13 +133,26 @@ def login():
         if _rate_limiter.is_locked(ip):
             error = "로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요."
             return render_template("login.html", error=error), 429
-        user = request.form.get("username", "")
+        username = request.form.get("username", "")
         pwd = request.form.get("password", "")
-        if _check_credentials(user, pwd):
+
+        # 1) DB 사용자 확인
+        user_dict = verify_user(username, pwd)
+        # 2) DB에 없으면 env var 어드민 폴백 (하위 호환 + 테스트 용이성)
+        if user_dict is None and _check_credentials(username, pwd):
+            user_dict = get_user_by_username(username) or {
+                "id": 0, "username": ADMIN_USER, "role": "admin",
+                "plan": "agency", "enabled": True,
+            }
+
+        if user_dict and user_dict.get("enabled"):
             _rate_limiter.register_success(ip)
-            session["authenticated"] = True
+            session["user_id"]  = user_dict["id"]
+            session["username"] = user_dict["username"]
+            session["role"]     = user_dict.get("role", "user")
             next_url = request.args.get("next") or url_for("index")
             return redirect(next_url)
+
         _rate_limiter.register_failure(ip)
         error = "아이디 또는 비밀번호가 올바르지 않습니다."
     return render_template("login.html", error=error)
