@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -247,6 +249,44 @@ def _call_gemini(client, prompt: str) -> str:
     return response.text.strip()
 
 
+def _unsplash_thumb(query: str) -> str:
+    """키워드로 Unsplash 이미지 URL 반환. 실패 시 빈 문자열."""
+    access_key = os.environ.get("UNSPLASH_ACCESS_KEY", "")
+    if not access_key or not access_key.isascii():
+        return ""
+    try:
+        q = urllib.parse.quote(query)
+        url = f"https://api.unsplash.com/search/photos?query={q}&per_page=1&orientation=landscape"
+        req = urllib.request.Request(url, headers={"Authorization": f"Client-ID {access_key}"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+        results = data.get("results", [])
+        if results:
+            return results[0]["urls"].get("small", "")
+    except Exception:
+        pass
+    return ""
+
+
+def _inject_unsplash_into_cta(body: str) -> str:
+    """[LINK_CARD] 블록에 Unsplash 썸네일 URL을 삽입."""
+    def _add_thumb(m: re.Match) -> str:
+        inner = m.group(1)
+        # 이미 🖼️ 라인이 있으면 중복 삽입 방지
+        if "🖼️" in inner:
+            return m.group(0)
+        # 📰 제목 줄에서 검색어 추출
+        title_match = re.search(r"📰\s*(.+)", inner)
+        if not title_match:
+            return m.group(0)
+        query = title_match.group(1).strip()[:60]
+        thumb = _unsplash_thumb(query)
+        if thumb:
+            inner = inner.rstrip() + f"\n🖼️ {thumb}"
+        return f"[LINK_CARD]{inner}\n[/LINK_CARD]"
+    return re.sub(r"\[LINK_CARD\]([\s\S]*?)\[/LINK_CARD\]", _add_thumb, body)
+
+
 def generate_content(analyzed_data: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -265,13 +305,20 @@ def generate_content(analyzed_data: dict) -> dict:
     text = re.sub(r'\n?```\s*$', '', text)
 
     try:
-        return json.loads(text)
+        result = json.loads(text)
     except json.JSONDecodeError:
-        # 1차: 무효 이스케이프 수정 (\( \% 등 → \\( \\% )
-        # 유효 JSON 이스케이프: \" \\ \/ \b \f \n \r \t \uXXXX
         fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
         try:
-            return json.loads(fixed)
+            result = json.loads(fixed)
         except json.JSONDecodeError:
-            # 2차: 리터럴 줄바꿈 허용 (strict=False)
-            return json.loads(fixed, strict=False)
+            result = json.loads(fixed, strict=False)
+
+    # CTA 링크카드에 Unsplash 썸네일 삽입 (실패 시 무시)
+    try:
+        body = result.get("naver_blog", {}).get("body", "")
+        if "[LINK_CARD]" in body:
+            result["naver_blog"]["body"] = _inject_unsplash_into_cta(body)
+    except Exception:
+        pass
+
+    return result

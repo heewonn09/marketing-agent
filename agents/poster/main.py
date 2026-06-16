@@ -314,25 +314,33 @@ def _md_to_html(text: str) -> str:
     # [LINK_CARD]...[/LINK_CARD] → 링크 카드 스타일 박스
     def _link_card(m):
         inner = m.group(1).strip()
-        # 📰 제목 줄 추출
-        title_line = ""
-        url_line = ""
+        title_line = thumb_url = url_line = ""
         for ln in inner.splitlines():
             ln = ln.strip()
             if ln.startswith("📰"):
                 title_line = ln[1:].strip()
             elif ln.startswith("🔗"):
                 url_line = ln[1:].strip()
+            elif ln.startswith("🖼️"):
+                thumb_url = ln[2:].strip()
         if url_line:
+            thumb_html = (
+                f'<img src="{thumb_url}" alt="썸네일" '
+                'style="width:100%;max-height:140px;object-fit:cover;'
+                'border-radius:6px 6px 0 0;display:block;margin-bottom:10px;">'
+                if thumb_url else ""
+            )
             return (
                 '<div style="border:1px solid #e0e0e0;border-radius:8px;'
-                'padding:14px 18px;margin:10px 0;background:#fff;'
+                'margin:10px 0;background:#fff;overflow:hidden;'
                 'box-shadow:0 1px 4px rgba(0,0,0,0.08);">'
+                + thumb_html +
+                f'<div style="padding:12px 16px;">'
                 f'<a href="{url_line}" style="text-decoration:none;color:#222;">'
-                f'<span style="font-size:13px;color:#2db400;font-weight:bold;">▶ 추천 글</span><br>'
+                f'<span style="font-size:12px;color:#2db400;font-weight:bold;">▶ 추천 글</span><br>'
                 f'<span style="font-size:15px;font-weight:bold;line-height:1.6;">{title_line}</span><br>'
-                f'<span style="font-size:12px;color:#888;">{url_line}</span>'
-                '</a></div>'
+                f'<span style="font-size:12px;color:#aaa;">{url_line}</span>'
+                '</a></div></div>'
             )
         return _md_to_html_lines(inner)
     text = re.sub(r'\[LINK_CARD\]([\s\S]*?)\[/LINK_CARD\]', _link_card, text)
@@ -459,11 +467,16 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
 
     _goto_editor()
 
-    # 에디터 완전 로딩 대기
-    page.wait_for_selector(".se-container", timeout=15000)
-    time.sleep(2.5)
+    # 도움말·팝업 먼저 닫기 (se-container 로딩을 가리는 경우 방지)
+    _close_help_popup(page)
+    _dismiss_all_popups(page)
+    time.sleep(0.8)
 
-    # 초기 팝업/다이얼로그 전부 닫기 (pointer-events 차단 해제)
+    # 에디터 완전 로딩 대기 (재로그인 후 React 초기화 시간 확보)
+    page.wait_for_selector(".se-container", timeout=35000)
+    time.sleep(2.0)
+
+    # 팝업 재확인 (se-container 로딩 후 새로 뜨는 팝업 처리)
     _dismiss_all_popups(page)
     time.sleep(0.5)
 
