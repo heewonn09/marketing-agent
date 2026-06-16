@@ -287,27 +287,80 @@ def _type_lines(page, text: str):
 
 
 def _inline_md(text: str) -> str:
-    """인라인 마크다운 변환 (**bold**, *italic*)."""
+    """인라인 마크다운 + 커스텀 태그 변환."""
+    # [HL]텍스트[/HL] → 하이라이트 배경 (볼드와 함께 쓰임)
+    text = re.sub(
+        r'\[HL\](.+?)\[/HL\]',
+        r'<mark style="background-color:#fff740;padding:1px 3px;">\1</mark>',
+        text,
+    )
+    # **볼드** (HL 처리 후에 실행해야 중첩 안전)
     text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
     text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    # 링크 [텍스트](URL)
+    text = re.sub(r'\[([^\]]+)\]\((https?://[^\)]+)\)', r'<a href="\2">\1</a>', text)
     return text
 
 
 def _md_to_html(text: str) -> str:
-    """마크다운 → HTML 변환 (SmartEditor ONE innerHTML 삽입용)."""
+    """마크다운 + 커스텀 태그 → HTML 변환 (SmartEditor ONE clipboard 삽입용)."""
+    # [IMAGE: ...] 태그 제거 (편집자 참고용 주석으로 보존)
+    text = re.sub(
+        r'\[IMAGE:\s*([^\]]+)\]',
+        lambda m: f'<!-- 이미지 삽입 위치: {m.group(1).strip()} -->',
+        text,
+    )
+
+    # [CTA_BOX]...[/CTA_BOX] → 스타일 박스
+    def _cta_block(m):
+        inner = _md_to_html_lines(m.group(1).strip())
+        return (
+            '<div style="border:2px solid #2db400;border-radius:8px;'
+            'padding:16px 20px;background:#f8fff8;margin:24px 0;">'
+            + inner + '</div>'
+        )
+    text = re.sub(r'\[CTA_BOX\]([\s\S]*?)\[/CTA_BOX\]', _cta_block, text)
+
+    # [QUOTE]...[/QUOTE] → 인용구 블록 (H2 소제목용)
+    def _quote_block(m):
+        inner = _inline_md(m.group(1).strip())
+        return (
+            '<blockquote style="border-left:4px solid #2db400;'
+            'padding:10px 16px;background:#f5f5f5;margin:16px 0;'
+            'font-size:19px;font-weight:bold;line-height:1.5;">'
+            + inner + '</blockquote>'
+        )
+    text = re.sub(r'\[QUOTE\]([\s\S]*?)\[/QUOTE\]', _quote_block, text)
+
+    return _md_to_html_lines(text)
+
+
+def _md_to_html_lines(text: str) -> str:
+    """줄 단위 마크다운 → HTML (재귀 호출용 내부 함수)."""
+    _BULLET_STYLE = (
+        'style="margin:4px 0;padding-left:8px;line-height:1.8;font-size:15px;"'
+    )
+    _P_STYLE = 'style="line-height:1.8;font-size:15px;margin:6px 0;"'
+    # 이미 HTML 블록 요소로 변환된 줄은 그대로 통과 (중첩 <p> 방지)
+    _BLOCK_PREFIXES = ("<blockquote", "<div", "<h1", "<h2", "<h3", "<!--")
     parts = []
     for line in text.split("\n"):
         s = line.strip()
-        if s.startswith("### "):
+        if any(s.startswith(p) for p in _BLOCK_PREFIXES):
+            parts.append(s)
+        elif s.startswith("### "):
             parts.append(f"<h3>{_inline_md(s[4:])}</h3>")
         elif s.startswith("## "):
             parts.append(f"<h2>{_inline_md(s[3:])}</h2>")
         elif s.startswith("# "):
             parts.append(f"<h1>{_inline_md(s[2:])}</h1>")
-        elif s == "":
+        elif s.startswith("• ") or s.startswith("- ") or s.startswith("* "):
+            content = s[2:]
+            parts.append(f"<p {_BULLET_STYLE}>• {_inline_md(content)}</p>")
+        elif s == "" or s == "---":
             parts.append("<br>")
         else:
-            parts.append(f"<p>{_inline_md(s)}</p>")
+            parts.append(f"<p {_P_STYLE}>{_inline_md(s)}</p>")
     return "".join(parts)
 
 
