@@ -304,25 +304,51 @@ def _inline_md(text: str) -> str:
 
 def _md_to_html(text: str) -> str:
     """마크다운 + 커스텀 태그 → HTML 변환 (SmartEditor ONE clipboard 삽입용)."""
-    # [IMAGE: ...] 태그 제거 (편집자 참고용 주석으로 보존)
+    # [IMAGE: ...] → 편집자 참고용 HTML 주석
     text = re.sub(
         r'\[IMAGE:\s*([^\]]+)\]',
         lambda m: f'<!-- 이미지 삽입 위치: {m.group(1).strip()} -->',
         text,
     )
 
-    # [CTA_BOX]...[/CTA_BOX] → 스타일 박스
+    # [LINK_CARD]...[/LINK_CARD] → 링크 카드 스타일 박스
+    def _link_card(m):
+        inner = m.group(1).strip()
+        # 📰 제목 줄 추출
+        title_line = ""
+        url_line = ""
+        for ln in inner.splitlines():
+            ln = ln.strip()
+            if ln.startswith("📰"):
+                title_line = ln[1:].strip()
+            elif ln.startswith("🔗"):
+                url_line = ln[1:].strip()
+        if url_line:
+            return (
+                '<div style="border:1px solid #e0e0e0;border-radius:8px;'
+                'padding:14px 18px;margin:10px 0;background:#fff;'
+                'box-shadow:0 1px 4px rgba(0,0,0,0.08);">'
+                f'<a href="{url_line}" style="text-decoration:none;color:#222;">'
+                f'<span style="font-size:13px;color:#2db400;font-weight:bold;">▶ 추천 글</span><br>'
+                f'<span style="font-size:15px;font-weight:bold;line-height:1.6;">{title_line}</span><br>'
+                f'<span style="font-size:12px;color:#888;">{url_line}</span>'
+                '</a></div>'
+            )
+        return _md_to_html_lines(inner)
+    text = re.sub(r'\[LINK_CARD\]([\s\S]*?)\[/LINK_CARD\]', _link_card, text)
+
+    # [CTA_BOX]...[/CTA_BOX] → 녹색 테두리 박스
     def _cta_block(m):
         inner = _md_to_html_lines(m.group(1).strip())
         return (
-            '<div style="border:2px solid #2db400;border-radius:8px;'
-            'padding:16px 20px;background:#f8fff8;margin:24px 0;">'
+            '<div style="border:2px solid #2db400;border-radius:10px;'
+            'padding:18px 22px;background:#f8fff8;margin:28px 0;">'
             + inner + '</div>'
         )
     text = re.sub(r'\[CTA_BOX\]([\s\S]*?)\[/CTA_BOX\]', _cta_block, text)
 
-    # [QUOTE]...[/QUOTE] → 인용구 블록 (H2 소제목용)
-    def _quote_block(m):
+    # [QUOTE]...[/QUOTE] → 버티컬 라인 인용구 (하위 호환)
+    def _quote_wrap(m):
         inner = _inline_md(m.group(1).strip())
         return (
             '<blockquote style="border-left:4px solid #2db400;'
@@ -330,17 +356,20 @@ def _md_to_html(text: str) -> str:
             'font-size:19px;font-weight:bold;line-height:1.5;">'
             + inner + '</blockquote>'
         )
-    text = re.sub(r'\[QUOTE\]([\s\S]*?)\[/QUOTE\]', _quote_block, text)
+    text = re.sub(r'\[QUOTE\]([\s\S]*?)\[/QUOTE\]', _quote_wrap, text)
 
     return _md_to_html_lines(text)
 
 
 def _md_to_html_lines(text: str) -> str:
     """줄 단위 마크다운 → HTML (재귀 호출용 내부 함수)."""
-    _BULLET_STYLE = (
-        'style="margin:4px 0;padding-left:8px;line-height:1.8;font-size:15px;"'
-    )
-    _P_STYLE = 'style="line-height:1.8;font-size:15px;margin:6px 0;"'
+    _BULLET_STYLE = 'style="margin:4px 0;padding-left:8px;line-height:1.8;font-size:15px;"'
+    _P_STYLE      = 'style="line-height:1.8;font-size:15px;margin:6px 0;"'
+    _H3_STYLE     = ('style="font-size:16px;font-weight:bold;margin:14px 0 6px;'
+                     'padding:6px 10px;background:#f0faf0;border-radius:4px;"')
+    _QUOTE_STYLE  = ('style="border-left:4px solid #2db400;padding:10px 16px;'
+                     'background:#f5f5f5;margin:16px 0;font-size:19px;'
+                     'font-weight:bold;line-height:1.5;"')
     # 이미 HTML 블록 요소로 변환된 줄은 그대로 통과 (중첩 <p> 방지)
     _BLOCK_PREFIXES = ("<blockquote", "<div", "<h1", "<h2", "<h3", "<!--")
     parts = []
@@ -348,12 +377,19 @@ def _md_to_html_lines(text: str) -> str:
         s = line.strip()
         if any(s.startswith(p) for p in _BLOCK_PREFIXES):
             parts.append(s)
+        # [인용구] 접두사 → 버티컬 라인 blockquote (H2 대제목)
+        elif s.startswith("[인용구]"):
+            inner = _inline_md(s[len("[인용구]"):].strip())
+            parts.append(f'<blockquote {_QUOTE_STYLE}>{inner}</blockquote>')
         elif s.startswith("### "):
             parts.append(f"<h3>{_inline_md(s[4:])}</h3>")
         elif s.startswith("## "):
             parts.append(f"<h2>{_inline_md(s[3:])}</h2>")
         elif s.startswith("# "):
             parts.append(f"<h1>{_inline_md(s[2:])}</h1>")
+        # ✅ / 📌 접두사 → H3 소제목 박스
+        elif s.startswith("✅ ") or s.startswith("📌 "):
+            parts.append(f'<p {_H3_STYLE}>{_inline_md(s)}</p>')
         elif s.startswith("• ") or s.startswith("- ") or s.startswith("* "):
             content = s[2:]
             parts.append(f"<p {_BULLET_STYLE}>• {_inline_md(content)}</p>")
