@@ -23,7 +23,8 @@ def init_db(db_path: Path) -> None:
                 naver_post_url       TEXT,
                 instagram_media_id   TEXT,
                 instagram_permalink  TEXT,
-                duration_seconds     INTEGER
+                duration_seconds     INTEGER,
+                error_message        TEXT
             )
         """)
         conn.execute("""
@@ -47,6 +48,7 @@ def init_db(db_path: Path) -> None:
             "ALTER TABLE jobs ADD COLUMN instagram_media_id TEXT",
             "ALTER TABLE jobs ADD COLUMN instagram_permalink TEXT",
             "ALTER TABLE jobs ADD COLUMN duration_seconds INTEGER",
+            "ALTER TABLE jobs ADD COLUMN error_message TEXT",
         ]:
             try:
                 conn.execute(col_def)
@@ -65,12 +67,13 @@ def upsert_job(
     instagram_media_id: str | None = None,
     instagram_permalink: str | None = None,
     duration_seconds: int | None = None,
+    error_message: str | None = None,
 ) -> None:
     path = db_path or _DEFAULT_DB
     now = datetime.now().isoformat()
     with sqlite3.connect(path) as conn:
         existing = conn.execute(
-            "SELECT created_at, keywords, date, naver_post_url, instagram_media_id, instagram_permalink, duration_seconds FROM jobs WHERE job_id = ?",
+            "SELECT created_at, keywords, date, naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message FROM jobs WHERE job_id = ?",
             (job_id,)
         ).fetchone()
         created_at             = existing[0] if existing else now
@@ -80,13 +83,14 @@ def upsert_job(
         final_ig_media_id      = instagram_media_id if instagram_media_id is not None else (existing[4] if existing else None)
         final_ig_permalink     = instagram_permalink if instagram_permalink is not None else (existing[5] if existing else None)
         final_duration         = duration_seconds if duration_seconds is not None else (existing[6] if existing else None)
+        final_error_msg        = error_message if error_message is not None else (existing[7] if existing else None)
         conn.execute(
             """INSERT OR REPLACE INTO jobs
                (job_id, status, keywords, date, created_at, updated_at,
-                naver_post_url, instagram_media_id, instagram_permalink, duration_seconds)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (job_id, status, final_keywords, final_date, created_at, now,
-             final_naver_url, final_ig_media_id, final_ig_permalink, final_duration),
+             final_naver_url, final_ig_media_id, final_ig_permalink, final_duration, final_error_msg),
         )
 
 
@@ -94,7 +98,7 @@ def get_job(job_id: str, db_path: Path | None = None) -> dict | None:
     path = db_path or _DEFAULT_DB
     with sqlite3.connect(path) as conn:
         row = conn.execute(
-            "SELECT job_id, status, keywords, date, naver_post_url, instagram_media_id, instagram_permalink, duration_seconds FROM jobs WHERE job_id = ?",
+            "SELECT job_id, status, keywords, date, naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message FROM jobs WHERE job_id = ?",
             (job_id,),
         ).fetchone()
     if not row:
@@ -108,19 +112,57 @@ def get_job(job_id: str, db_path: Path | None = None) -> dict | None:
         "instagram_media_id": row[5],
         "instagram_permalink": row[6],
         "duration_seconds": row[7],
+        "error_message": row[8],
     }
 
 
-def list_jobs(limit: int = 20, db_path: Path | None = None) -> list[dict]:
+def list_jobs(
+    page: int = 1,
+    per_page: int = 10,
+    status: str = "",
+    q: str = "",
+    from_date: str = "",
+    to_date: str = "",
+    db_path: Path | None = None,
+) -> dict:
+    """페이지네이션·필터 지원 목록 반환.
+
+    반환 형식: {"items": [...], "total": N, "page": N, "pages": N}
+    """
     path = db_path or _DEFAULT_DB
+    where_clauses: list[str] = []
+    params: list = []
+
+    if status:
+        where_clauses.append("status = ?")
+        params.append(status)
+    if q:
+        where_clauses.append("keywords LIKE ?")
+        params.append(f"%{q}%")
+    if from_date:
+        where_clauses.append("created_at >= ?")
+        params.append(from_date)
+    if to_date:
+        where_clauses.append("created_at <= ?")
+        params.append(to_date + "T23:59:59")
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
     with sqlite3.connect(path) as conn:
+        total: int = conn.execute(
+            f"SELECT COUNT(*) FROM jobs {where_sql}", params
+        ).fetchone()[0]
+
+        offset = (page - 1) * per_page
         rows = conn.execute(
-            "SELECT job_id, status, keywords, date, created_at, "
-            "naver_post_url, instagram_media_id, instagram_permalink, duration_seconds "
-            "FROM jobs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
+            f"SELECT job_id, status, keywords, date, created_at, "
+            f"naver_post_url, instagram_media_id, instagram_permalink, duration_seconds, error_message "
+            f"FROM jobs {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            params + [per_page, offset],
         ).fetchall()
-    return [
+
+    pages = max(1, (total + per_page - 1) // per_page)
+    items = [
         {
             "job_id": row[0],
             "status": row[1],
@@ -131,9 +173,11 @@ def list_jobs(limit: int = 20, db_path: Path | None = None) -> list[dict]:
             "instagram_media_id": row[6],
             "instagram_permalink": row[7],
             "duration_seconds": row[8],
+            "error_message": row[9],
         }
         for row in rows
     ]
+    return {"items": items, "total": total, "page": page, "pages": pages}
 
 
 def get_stats(db_path: Path | None = None) -> dict:

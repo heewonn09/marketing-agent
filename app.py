@@ -181,7 +181,7 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
             q.put(f"ERROR:{err_msg}")
             if fatal:
                 jobs[job_id]["status"] = "error"
-                upsert_job(job_id, "error")
+                upsert_job(job_id, "error", error_message=err_msg)
                 q.put("DONE")
                 kws = jobs[job_id].get("keywords") or []
                 threading.Thread(target=notify_error, args=(kws, name, err_msg), daemon=True).start()
@@ -191,7 +191,7 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
         q.put(f"ERROR:{err_msg}")
         if fatal:
             jobs[job_id]["status"] = "error"
-            upsert_job(job_id, "error")
+            upsert_job(job_id, "error", error_message=err_msg)
             q.put("DONE")
             kws = jobs[job_id].get("keywords") or []
             threading.Thread(target=notify_error, args=(kws, name, err_msg), daemon=True).start()
@@ -482,7 +482,15 @@ def serve_cardnews(filename: str):
 
 @app.route("/history")
 def history():
-    return jsonify(list_jobs(limit=20))
+    page     = max(1, int(request.args.get("page", 1)))
+    per_page = max(1, min(100, int(request.args.get("per_page", 10))))
+    status   = request.args.get("status", "")
+    q        = request.args.get("q", "")
+    from_d   = request.args.get("from", "")
+    to_d     = request.args.get("to", "")
+    result   = list_jobs(page=page, per_page=per_page, status=status, q=q,
+                         from_date=from_d, to_date=to_d)
+    return jsonify(result)
 
 
 @app.route("/stats")
