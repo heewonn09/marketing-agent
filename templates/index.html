@@ -1566,8 +1566,8 @@
     const HIST_PAGE_SIZE = 10;
 
     function loadHistory() {
-        fetch('/history').then(r=>r.json()).then(jobs=>{
-            histAllJobs = jobs;
+        fetch('/history?per_page=100').then(r=>r.json()).then(data=>{
+            histAllJobs = Array.isArray(data) ? data : (data.items || []);
             histPage = 1;
             renderHistory();
         }).catch(()=>{});
