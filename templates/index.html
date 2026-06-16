@@ -488,8 +488,10 @@
             display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
         }
         .sched-card-info { flex: 1; min-width: 0; }
-        .sched-card-name { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 4px; }
+        .sched-card-name { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .sched-card-id { font-size: 10px; font-weight: 600; color: #a0aec0; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 5px; }
         .sched-card-meta { font-size: 11px; color: #718096; margin-bottom: 4px; }
+        .sched-card-created { font-size: 10px; color: #cbd5e0; margin-top: 2px; }
         .sched-badge {
             display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-right: 4px;
         }
@@ -506,20 +508,49 @@
         .sched-btn-toggle { background: #e2e8f0; color: #4a5568; }
         .sched-btn-edit   { background: #ebf8ff; color: #2c7a7b; }
         .sched-btn-del    { background: #fff5f5; color: #c53030; }
-        .sched-form { border-top: 1px solid #e2e8f0; padding-top: 14px; display: none; }
-        .sched-form.open { display: block; }
-        .sf-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+        .sched-empty { font-size: 13px; color: #a0aec0; text-align: center; padding: 20px 0; }
+        /* 예약 폼 모달 */
+        .sched-modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.45); z-index: 1000;
+            align-items: center; justify-content: center; padding: 16px;
+        }
+        .sched-modal-overlay.open { display: flex; }
+        .sched-modal {
+            background: white; border-radius: 16px; padding: 26px 28px;
+            width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        }
+        .sched-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .sched-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; }
+        .sched-modal-close { background: none; border: none; font-size: 20px; color: #a0aec0; cursor: pointer; padding: 0 4px; line-height: 1; }
+        .sched-modal-close:hover { color: #4a5568; }
+        .sf-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
         .sf-label { font-size: 11px; font-weight: 700; color: #718096; min-width: 50px; }
         .sf-input {
-            padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 7px;
+            padding: 8px 11px; border: 1.5px solid #e2e8f0; border-radius: 7px;
             font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s;
         }
         .sf-input:focus { border-color: #667eea; }
-        .sf-select { padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 7px; font-size: 13px; font-family: inherit; background: white; }
-        .day-checks { display: flex; gap: 6px; flex-wrap: wrap; }
-        .day-check label { display: flex; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; }
-        .sf-btn-group { display: flex; gap: 8px; margin-top: 12px; }
-        .sched-empty { font-size: 13px; color: #a0aec0; text-align: center; padding: 20px 0; }
+        .sf-select { padding: 8px 11px; border: 1.5px solid #e2e8f0; border-radius: 7px; font-size: 13px; font-family: inherit; background: white; cursor: pointer; }
+        .day-checks { display: flex; gap: 4px; flex-wrap: wrap; }
+        .day-checks label {
+            display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer;
+            padding: 5px 9px; border-radius: 7px; border: 1.5px solid #e2e8f0;
+            transition: all 0.15s; user-select: none;
+        }
+        .day-checks label:hover { border-color: #667eea; color: #667eea; }
+        .day-checks input[type=checkbox] { display: none; }
+        .day-checks label.checked { background: #667eea; color: white; border-color: #667eea; font-weight: 700; }
+        .sf-channel-checks { display: flex; gap: 8px; flex-wrap: wrap; }
+        .sf-channel-checks label {
+            display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;
+            padding: 6px 12px; border-radius: 7px; border: 1.5px solid #e2e8f0;
+            transition: all 0.15s; user-select: none;
+        }
+        .sf-channel-checks label:hover { border-color: #667eea; }
+        .sf-channel-checks input[type=checkbox] { accent-color: #667eea; width: 15px; height: 15px; cursor: pointer; }
+        .sf-btn-group { display: flex; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #edf2f7; }
     </style>
 </head>
 <body>
@@ -605,8 +636,16 @@
                 </div>
 
                 <div class="placeholder" id="placeholder">
-                    <div class="placeholder-icon">📊</div>
-                    <p>키워드를 입력하고 실행하면<br>콘텐츠 결과가 여기에 표시됩니다.</p>
+                    <div class="placeholder-icon">✍️</div>
+                    <p style="font-weight:600;color:#a0aec0;font-size:14px;margin-bottom:4px">키워드를 입력하고 실행해보세요</p>
+                    <p style="color:#cbd5e0;font-size:12px">수집·분석부터 블로그·인스타그램 발행까지 자동으로 처리됩니다.</p>
+                    <div class="placeholder-steps" style="margin-top:18px">
+                        <span class="ps-step">키워드 입력</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">수집·분석</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">콘텐츠 생성</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">검토·승인</span><span class="ps-arrow">›</span>
+                        <span class="ps-step">자동 발행</span>
+                    </div>
                 </div>
 
                 <!-- 승인 배너 -->
@@ -663,56 +702,67 @@
                 <div class="sched-empty">불러오는 중...</div>
             </div>
             <button class="btn-run" style="font-size:12px;padding:8px 16px" onclick="openSchedForm()">+ 새 예약 추가</button>
-            <div class="sched-form" id="sched-form">
-                <input type="hidden" id="sf-id" value="">
-                <div class="sf-row">
-                    <span class="sf-label">이름</span>
-                    <input class="sf-input" id="sf-name" placeholder="예약 이름 (선택)" style="flex:1">
-                </div>
-                <div class="sf-row">
-                    <span class="sf-label">키워드</span>
-                    <input class="sf-input" id="sf-keywords" placeholder="키워드1, 키워드2" style="flex:1">
-                </div>
-                <div class="sf-row">
-                    <span class="sf-label">요일</span>
-                    <div class="day-checks">
-                        <label><input type="checkbox" value="mon"> 월</label>
-                        <label><input type="checkbox" value="tue"> 화</label>
-                        <label><input type="checkbox" value="wed"> 수</label>
-                        <label><input type="checkbox" value="thu"> 목</label>
-                        <label><input type="checkbox" value="fri"> 금</label>
-                        <label><input type="checkbox" value="sat"> 토</label>
-                        <label><input type="checkbox" value="sun"> 일</label>
-                    </div>
-                </div>
-                <div class="sf-row">
-                    <span class="sf-label">시간</span>
-                    <select class="sf-select" id="sf-hour"></select>
-                    <span style="font-size:13px;color:#718096">시</span>
-                    <select class="sf-select" id="sf-minute">
-                        <option value="0">00분</option>
-                        <option value="10">10분</option>
-                        <option value="20">20분</option>
-                        <option value="30">30분</option>
-                        <option value="40">40분</option>
-                        <option value="50">50분</option>
-                    </select>
-                </div>
-                <div class="sf-row">
-                    <span class="sf-label">채널</span>
-                    <label style="font-size:13px;cursor:pointer"><input type="checkbox" id="sf-blog" checked> 블로그</label>
-                    <label style="font-size:13px;cursor:pointer"><input type="checkbox" id="sf-ig"> 인스타그램</label>
-                </div>
-                <div class="sf-row">
-                    <label style="font-size:13px;cursor:pointer"><input type="checkbox" id="sf-enabled" checked> 활성화</label>
-                </div>
-                <div class="sf-btn-group">
-                    <button class="btn-run" style="font-size:12px;padding:8px 18px" onclick="saveSchedule()">저장</button>
-                    <button class="sched-btn" style="padding:8px 14px;font-size:12px;background:#e2e8f0;color:#4a5568" onclick="closeSchedForm()">취소</button>
-                </div>
-            </div>
         </div>
     </details>
+
+    <!-- 예약 폼 모달 -->
+    <div class="sched-modal-overlay" id="sched-modal" onclick="if(event.target===this)closeSchedForm()">
+        <div class="sched-modal">
+            <div class="sched-modal-header">
+                <div class="sched-modal-title" id="sched-modal-title">새 예약 추가</div>
+                <button class="sched-modal-close" onclick="closeSchedForm()">✕</button>
+            </div>
+            <input type="hidden" id="sf-id" value="">
+            <div class="sf-row">
+                <span class="sf-label">이름</span>
+                <input class="sf-input" id="sf-name" placeholder="예약 이름 (선택)" style="flex:1">
+            </div>
+            <div class="sf-row">
+                <span class="sf-label">키워드</span>
+                <input class="sf-input" id="sf-keywords" placeholder="키워드1, 키워드2" style="flex:1">
+            </div>
+            <div class="sf-row" style="align-items:flex-start">
+                <span class="sf-label" style="padding-top:6px">요일</span>
+                <div class="day-checks">
+                    <label data-val="mon">월</label>
+                    <label data-val="tue">화</label>
+                    <label data-val="wed">수</label>
+                    <label data-val="thu">목</label>
+                    <label data-val="fri">금</label>
+                    <label data-val="sat">토</label>
+                    <label data-val="sun">일</label>
+                </div>
+            </div>
+            <div class="sf-row">
+                <span class="sf-label">시간</span>
+                <select class="sf-select" id="sf-hour"></select>
+                <select class="sf-select" id="sf-minute">
+                    <option value="0">00분</option>
+                    <option value="10">10분</option>
+                    <option value="20">20분</option>
+                    <option value="30">30분</option>
+                    <option value="40">40분</option>
+                    <option value="50">50분</option>
+                </select>
+            </div>
+            <div class="sf-row" style="align-items:flex-start">
+                <span class="sf-label" style="padding-top:6px">채널</span>
+                <div class="sf-channel-checks">
+                    <label><input type="checkbox" id="sf-blog" checked> 블로그</label>
+                    <label><input type="checkbox" id="sf-ig"> 인스타그램</label>
+                </div>
+            </div>
+            <div class="sf-row">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" id="sf-enabled" checked style="accent-color:#667eea;width:15px;height:15px"> 활성화
+                </label>
+            </div>
+            <div class="sf-btn-group">
+                <button class="btn-run" style="font-size:13px;padding:9px 22px;flex:1" onclick="saveSchedule()">저장</button>
+                <button class="sched-btn" style="padding:9px 16px;font-size:13px;background:#e2e8f0;color:#4a5568" onclick="closeSchedForm()">취소</button>
+            </div>
+        </div>
+    </div>
 
 </div>
 
@@ -1475,25 +1525,34 @@
             hourSel.appendChild(o);
         }
         hourSel.value = 9;
+        // 요일 버튼 토글 동작
+        document.querySelectorAll('.day-checks label').forEach(lbl => {
+            lbl.addEventListener('click', () => lbl.classList.toggle('checked'));
+        });
     })();
 
     function loadSchedules() {
         fetch('/schedules').then(r => r.json()).then(list => {
             const el = document.getElementById('sched-list');
-            if (!list.length) { el.innerHTML = '<div class="sched-empty">예약된 항목이 없습니다.</div>'; return; }
+            if (!list.length) { el.innerHTML = '<div class="sched-empty">예약된 항목이 없습니다.<br><span style="font-size:11px">위 버튼으로 첫 예약을 추가해보세요.</span></div>'; return; }
             el.innerHTML = list.map(s => {
-                const days = s.days.split(',').map(d => ({'mon':'월','tue':'화','wed':'수','thu':'목','fri':'금','sat':'토','sun':'일'}[d]||d)).join(' ');
+                const dayMap = {'mon':'월','tue':'화','wed':'수','thu':'목','fri':'금','sat':'토','sun':'일'};
+                const days = s.days.split(',').map(d => dayMap[d]||d).join(' ');
                 const next = s.next_run ? new Date(s.next_run).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+                const created = s.created_at ? new Date(s.created_at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'}) + ' 등록' : '';
                 return `<div class="sched-card">
                     <div class="sched-card-info">
-                        <div class="sched-card-name">${esc(s.name || '(이름 없음)')}</div>
+                        <div class="sched-card-name">
+                            ${esc(s.name || '(이름 없음)')}
+                            <span class="sched-card-id">#${s.id}</span>
+                        </div>
                         <div class="sched-card-meta">${esc(s.keywords.join(', '))} &nbsp;|&nbsp; ${days} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</div>
-                        <div>
+                        <div style="margin:4px 0">
                             ${s.post_blog ? '<span class="sched-badge badge-blog">블로그</span>' : ''}
                             ${s.post_instagram ? '<span class="sched-badge badge-ig">인스타그램</span>' : ''}
                             <span class="sched-badge ${s.enabled ? 'badge-on' : 'badge-off'}">${s.enabled ? 'ON' : 'OFF'}</span>
                         </div>
-                        <div class="sched-next">다음 실행: ${next}</div>
+                        <div class="sched-next">다음 실행: ${next}${created ? ' &nbsp;·&nbsp; ' + created : ''}</div>
                     </div>
                     <div class="sched-actions">
                         <button class="sched-btn sched-btn-toggle" onclick="toggleSchedule(${s.id})">${s.enabled ? '중지' : '시작'}</button>
@@ -1508,16 +1567,19 @@
     }
 
     function openSchedForm(clearId = true) {
-        if (clearId) document.getElementById('sf-id').value = '';
-        document.getElementById('sched-form').classList.add('open');
+        if (clearId) {
+            document.getElementById('sf-id').value = '';
+            document.getElementById('sched-modal-title').textContent = '새 예약 추가';
+        }
+        document.getElementById('sched-modal').classList.add('open');
     }
 
     function closeSchedForm() {
-        document.getElementById('sched-form').classList.remove('open');
+        document.getElementById('sched-modal').classList.remove('open');
         document.getElementById('sf-id').value = '';
         document.getElementById('sf-name').value = '';
         document.getElementById('sf-keywords').value = '';
-        document.querySelectorAll('.day-checks input[type=checkbox]').forEach(c => c.checked = false);
+        document.querySelectorAll('.day-checks label').forEach(l => l.classList.remove('checked'));
         document.getElementById('sf-hour').value = 9;
         document.getElementById('sf-minute').value = 0;
         document.getElementById('sf-blog').checked = true;
@@ -1530,7 +1592,10 @@
         document.getElementById('sf-name').value = s.name || '';
         document.getElementById('sf-keywords').value = s.keywords.join(', ');
         const days = s.days.split(',');
-        document.querySelectorAll('.day-checks input[type=checkbox]').forEach(c => { c.checked = days.includes(c.value); });
+        document.querySelectorAll('.day-checks label').forEach(l => {
+            l.classList.toggle('checked', days.includes(l.dataset.val));
+        });
+        document.getElementById('sched-modal-title').textContent = '예약 수정';
         document.getElementById('sf-hour').value = s.hour;
         document.getElementById('sf-minute').value = s.minute;
         document.getElementById('sf-blog').checked = s.post_blog;
@@ -1542,7 +1607,7 @@
 
     function saveSchedule() {
         const sid = document.getElementById('sf-id').value;
-        const days = Array.from(document.querySelectorAll('.day-checks input:checked')).map(c => c.value);
+        const days = Array.from(document.querySelectorAll('.day-checks label.checked')).map(l => l.dataset.val);
         const body = {
             name: document.getElementById('sf-name').value.trim(),
             keywords: document.getElementById('sf-keywords').value.split(',').map(k => k.trim()).filter(Boolean),
