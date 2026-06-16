@@ -466,6 +466,60 @@
         #toast.success { background: #38a169; }
         #toast.error   { background: #e53e3e; }
         #toast.info    { background: #3182ce; }
+
+        /* ── 예약 관리 ──────────────────────────────────────────── */
+        .schedule-section { margin-top: 16px; }
+        .schedule-section summary {
+            cursor: pointer; list-style: none;
+            display: flex; align-items: center; gap: 8px;
+            padding: 14px 20px;
+            background: white; border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            font-size: 13px; font-weight: 700; color: #4a5568;
+            user-select: none;
+        }
+        .schedule-section summary::before { content: '▶'; font-size: 10px; color: #a0aec0; transition: transform 0.2s; }
+        .schedule-section[open] summary::before { transform: rotate(90deg); }
+        .schedule-section summary::-webkit-details-marker { display: none; }
+        .schedule-inner { background: white; border-radius: 0 0 12px 12px; padding: 16px 20px; margin-top: -8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .sched-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+        .sched-card {
+            border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px;
+            display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+        }
+        .sched-card-info { flex: 1; min-width: 0; }
+        .sched-card-name { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 4px; }
+        .sched-card-meta { font-size: 11px; color: #718096; margin-bottom: 4px; }
+        .sched-badge {
+            display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-right: 4px;
+        }
+        .badge-blog { background: #e9d8fd; color: #553c9a; }
+        .badge-ig   { background: #fed7e2; color: #97266d; }
+        .badge-on   { background: #c6f6d5; color: #276749; }
+        .badge-off  { background: #e2e8f0; color: #718096; }
+        .sched-next { font-size: 10px; color: #a0aec0; margin-top: 3px; }
+        .sched-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+        .sched-btn {
+            padding: 5px 10px; border-radius: 6px; border: none; font-size: 11px; font-weight: 600;
+            cursor: pointer; font-family: inherit; white-space: nowrap;
+        }
+        .sched-btn-toggle { background: #e2e8f0; color: #4a5568; }
+        .sched-btn-edit   { background: #ebf8ff; color: #2c7a7b; }
+        .sched-btn-del    { background: #fff5f5; color: #c53030; }
+        .sched-form { border-top: 1px solid #e2e8f0; padding-top: 14px; display: none; }
+        .sched-form.open { display: block; }
+        .sf-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+        .sf-label { font-size: 11px; font-weight: 700; color: #718096; min-width: 50px; }
+        .sf-input {
+            padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 7px;
+            font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s;
+        }
+        .sf-input:focus { border-color: #667eea; }
+        .sf-select { padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 7px; font-size: 13px; font-family: inherit; background: white; }
+        .day-checks { display: flex; gap: 6px; flex-wrap: wrap; }
+        .day-check label { display: flex; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; }
+        .sf-btn-group { display: flex; gap: 8px; margin-top: 12px; }
+        .sched-empty { font-size: 13px; color: #a0aec0; text-align: center; padding: 20px 0; }
     </style>
 </head>
 <body>
@@ -600,6 +654,65 @@
             <div class="history-empty">불러오는 중...</div>
         </div>
     </div>
+
+    <!-- 예약 관리 -->
+    <details class="schedule-section" id="schedule-section">
+        <summary>예약 관리</summary>
+        <div class="schedule-inner">
+            <div class="sched-list" id="sched-list">
+                <div class="sched-empty">불러오는 중...</div>
+            </div>
+            <button class="btn-run" style="font-size:12px;padding:8px 16px" onclick="openSchedForm()">+ 새 예약 추가</button>
+            <div class="sched-form" id="sched-form">
+                <input type="hidden" id="sf-id" value="">
+                <div class="sf-row">
+                    <span class="sf-label">이름</span>
+                    <input class="sf-input" id="sf-name" placeholder="예약 이름 (선택)" style="flex:1">
+                </div>
+                <div class="sf-row">
+                    <span class="sf-label">키워드</span>
+                    <input class="sf-input" id="sf-keywords" placeholder="키워드1, 키워드2" style="flex:1">
+                </div>
+                <div class="sf-row">
+                    <span class="sf-label">요일</span>
+                    <div class="day-checks">
+                        <label><input type="checkbox" value="mon"> 월</label>
+                        <label><input type="checkbox" value="tue"> 화</label>
+                        <label><input type="checkbox" value="wed"> 수</label>
+                        <label><input type="checkbox" value="thu"> 목</label>
+                        <label><input type="checkbox" value="fri"> 금</label>
+                        <label><input type="checkbox" value="sat"> 토</label>
+                        <label><input type="checkbox" value="sun"> 일</label>
+                    </div>
+                </div>
+                <div class="sf-row">
+                    <span class="sf-label">시간</span>
+                    <select class="sf-select" id="sf-hour"></select>
+                    <span style="font-size:13px;color:#718096">시</span>
+                    <select class="sf-select" id="sf-minute">
+                        <option value="0">00분</option>
+                        <option value="10">10분</option>
+                        <option value="20">20분</option>
+                        <option value="30">30분</option>
+                        <option value="40">40분</option>
+                        <option value="50">50분</option>
+                    </select>
+                </div>
+                <div class="sf-row">
+                    <span class="sf-label">채널</span>
+                    <label style="font-size:13px;cursor:pointer"><input type="checkbox" id="sf-blog" checked> 블로그</label>
+                    <label style="font-size:13px;cursor:pointer"><input type="checkbox" id="sf-ig"> 인스타그램</label>
+                </div>
+                <div class="sf-row">
+                    <label style="font-size:13px;cursor:pointer"><input type="checkbox" id="sf-enabled" checked> 활성화</label>
+                </div>
+                <div class="sf-btn-group">
+                    <button class="btn-run" style="font-size:12px;padding:8px 18px" onclick="saveSchedule()">저장</button>
+                    <button class="sched-btn" style="padding:8px 14px;font-size:12px;background:#e2e8f0;color:#4a5568" onclick="closeSchedForm()">취소</button>
+                </div>
+            </div>
+        </div>
+    </details>
 
 </div>
 
@@ -1352,6 +1465,121 @@
         }
         syncPipelineBarFromStep(name, state === 'active' ? 'active' : state === 'error' ? 'error' : 'done');
     };
+
+    // ── 예약 관리 ──────────────────────────────────────────────
+    (function(){
+        const hourSel = document.getElementById('sf-hour');
+        for (let h = 0; h < 24; h++) {
+            const o = document.createElement('option');
+            o.value = h; o.textContent = `${String(h).padStart(2,'0')}시`;
+            hourSel.appendChild(o);
+        }
+        hourSel.value = 9;
+    })();
+
+    function loadSchedules() {
+        fetch('/schedules').then(r => r.json()).then(list => {
+            const el = document.getElementById('sched-list');
+            if (!list.length) { el.innerHTML = '<div class="sched-empty">예약된 항목이 없습니다.</div>'; return; }
+            el.innerHTML = list.map(s => {
+                const days = s.days.split(',').map(d => ({'mon':'월','tue':'화','wed':'수','thu':'목','fri':'금','sat':'토','sun':'일'}[d]||d)).join(' ');
+                const next = s.next_run ? new Date(s.next_run).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+                return `<div class="sched-card">
+                    <div class="sched-card-info">
+                        <div class="sched-card-name">${s.name || '(이름 없음)'}</div>
+                        <div class="sched-card-meta">${s.keywords.join(', ')} &nbsp;|&nbsp; ${days} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</div>
+                        <div>
+                            ${s.post_blog ? '<span class="sched-badge badge-blog">블로그</span>' : ''}
+                            ${s.post_instagram ? '<span class="sched-badge badge-ig">인스타그램</span>' : ''}
+                            <span class="sched-badge ${s.enabled ? 'badge-on' : 'badge-off'}">${s.enabled ? 'ON' : 'OFF'}</span>
+                        </div>
+                        <div class="sched-next">다음 실행: ${next}</div>
+                    </div>
+                    <div class="sched-actions">
+                        <button class="sched-btn sched-btn-toggle" onclick="toggleSchedule(${s.id})">${s.enabled ? '중지' : '시작'}</button>
+                        <button class="sched-btn sched-btn-edit" onclick="editSchedule(${JSON.stringify(s).replace(/"/g,'&quot;')})">수정</button>
+                        <button class="sched-btn sched-btn-del" onclick="deleteSchedule(${s.id})">삭제</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }).catch(() => {
+            document.getElementById('sched-list').innerHTML = '<div class="sched-empty">불러오기 실패</div>';
+        });
+    }
+
+    function openSchedForm(clearId = true) {
+        if (clearId) document.getElementById('sf-id').value = '';
+        document.getElementById('sched-form').classList.add('open');
+    }
+
+    function closeSchedForm() {
+        document.getElementById('sched-form').classList.remove('open');
+        document.getElementById('sf-id').value = '';
+        document.getElementById('sf-name').value = '';
+        document.getElementById('sf-keywords').value = '';
+        document.querySelectorAll('.day-checks input[type=checkbox]').forEach(c => c.checked = false);
+        document.getElementById('sf-hour').value = 9;
+        document.getElementById('sf-minute').value = 0;
+        document.getElementById('sf-blog').checked = true;
+        document.getElementById('sf-ig').checked = false;
+        document.getElementById('sf-enabled').checked = true;
+    }
+
+    function editSchedule(s) {
+        document.getElementById('sf-id').value = s.id;
+        document.getElementById('sf-name').value = s.name || '';
+        document.getElementById('sf-keywords').value = s.keywords.join(', ');
+        const days = s.days.split(',');
+        document.querySelectorAll('.day-checks input[type=checkbox]').forEach(c => { c.checked = days.includes(c.value); });
+        document.getElementById('sf-hour').value = s.hour;
+        document.getElementById('sf-minute').value = s.minute;
+        document.getElementById('sf-blog').checked = s.post_blog;
+        document.getElementById('sf-ig').checked = s.post_instagram;
+        document.getElementById('sf-enabled').checked = s.enabled;
+        openSchedForm(false);
+        document.getElementById('sched-form').scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
+
+    function saveSchedule() {
+        const sid = document.getElementById('sf-id').value;
+        const days = Array.from(document.querySelectorAll('.day-checks input:checked')).map(c => c.value);
+        const body = {
+            name: document.getElementById('sf-name').value.trim(),
+            keywords: document.getElementById('sf-keywords').value.split(',').map(k => k.trim()).filter(Boolean),
+            days,
+            hour: parseInt(document.getElementById('sf-hour').value),
+            minute: parseInt(document.getElementById('sf-minute').value),
+            post_blog: document.getElementById('sf-blog').checked,
+            post_instagram: document.getElementById('sf-ig').checked,
+            enabled: document.getElementById('sf-enabled').checked,
+        };
+        const url = sid ? `/schedules/${sid}` : '/schedules';
+        const method = sid ? 'PUT' : 'POST';
+        fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (!ok) { showToast(data.error || '저장 실패', 'error'); return; }
+                showToast(sid ? '수정됨' : '예약 추가됨', 'success');
+                closeSchedForm();
+                loadSchedules();
+            });
+    }
+
+    function toggleSchedule(id) {
+        fetch(`/schedules/${id}/toggle`, {method:'POST'})
+            .then(r => r.json())
+            .then(() => loadSchedules());
+    }
+
+    function deleteSchedule(id) {
+        if (!confirm('이 예약을 삭제하시겠습니까?')) return;
+        fetch(`/schedules/${id}`, {method:'DELETE'})
+            .then(() => { showToast('삭제됨', 'info'); loadSchedules(); });
+    }
+
+    document.getElementById('schedule-section').addEventListener('toggle', e => {
+        if (e.target.open) loadSchedules();
+    });
 
     loadHistory();
     loadStats();
