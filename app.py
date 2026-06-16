@@ -164,6 +164,86 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ── 관리자 ────────────────────────────────────────────────────────────────────
+import functools as _functools
+
+
+def _require_admin(f):
+    @_functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        if session.get("role") != "admin":
+            return Response("관리자만 접근할 수 있습니다.", 403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+@app.route("/admin")
+@_require_admin
+def admin_page():
+    return render_template("admin.html")
+
+
+@app.route("/admin/users", methods=["GET"])
+@_require_admin
+def admin_users_list():
+    users = list_users()
+    safe = [{k: v for k, v in u.items() if k != "password_hash"} for u in users]
+    return jsonify({"users": safe})
+
+
+@app.route("/admin/users", methods=["POST"])
+@_require_admin
+def admin_users_create():
+    from werkzeug.security import generate_password_hash as _gph2
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = (data.get("password") or "").strip()
+    plan     = data.get("plan", "starter")
+    role     = data.get("role", "user")
+    if not username or not password:
+        return jsonify({"error": "username과 password는 필수입니다"}), 400
+    if plan not in ("starter", "pro", "agency"):
+        return jsonify({"error": "plan은 starter/pro/agency 중 하나입니다"}), 400
+    try:
+        uid = create_user(username, _gph2(password), role=role, plan=plan)
+        return jsonify({"id": uid, "username": username}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 409
+
+
+@app.route("/admin/users/<int:uid>", methods=["PATCH"])
+@_require_admin
+def admin_users_update(uid: int):
+    from werkzeug.security import generate_password_hash as _gph2
+    data = request.get_json(silent=True) or {}
+    fields: dict = {}
+    if "plan" in data:
+        fields["plan"] = data["plan"]
+    if "enabled" in data:
+        fields["enabled"] = bool(data["enabled"])
+    if "role" in data:
+        fields["role"] = data["role"]
+    if "password" in data and data["password"]:
+        fields["password_hash"] = _gph2(data["password"])
+    if not fields:
+        return jsonify({"error": "변경할 항목이 없습니다"}), 400
+    update_user(uid, **fields)
+    u = get_user_by_id(uid)
+    if not u:
+        return jsonify({"error": "사용자를 찾을 수 없습니다"}), 404
+    return jsonify({k: v for k, v in u.items() if k != "password_hash"})
+
+
+@app.route("/admin/users/<int:uid>", methods=["DELETE"])
+@_require_admin
+def admin_users_delete(uid: int):
+    u = get_user_by_id(uid)
+    if not u:
+        return jsonify({"error": "사용자를 찾을 수 없습니다"}), 404
+    delete_user(uid)
+    return jsonify({"ok": True})
+
+
 # ── 파이프라인 ─────────────────────────────────────────────────────────────
 
 def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool = True) -> bool:

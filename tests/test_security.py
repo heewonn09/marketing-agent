@@ -238,3 +238,59 @@ def test_admin_sees_all_jobs(monkeypatch):
     _us.delete_user(uid, db_path=db)
     with _sqlite3.connect(db) as conn:
         conn.execute("DELETE FROM jobs WHERE job_id='job-admin-view'")
+
+
+# ── admin 라우트 ──────────────────────────────────────────────────────────────
+def test_admin_page_requires_admin_role(monkeypatch):
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    from utils import user_store as _us
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    db = _a.ROOT / "data" / "jobs.db"
+    existing = _us.get_user_by_username("normaluser_t5", db_path=db)
+    if existing:
+        _us.delete_user(existing["id"], db_path=db)
+    uid = _us.create_user("normaluser_t5", _gph("pw"), role="user", db_path=db)
+    with _a.app.test_client() as c:
+        c.post("/login", data={"username": "normaluser_t5", "password": "pw"})
+        r = c.get("/admin")
+        assert r.status_code == 403
+    _us.delete_user(uid, db_path=db)
+
+
+def test_admin_can_list_users(monkeypatch):
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    with _a.app.test_client() as c:
+        c.post("/login", data={"username": "admin", "password": "adminpw"})
+        r = c.get("/admin/users")
+        assert r.status_code == 200
+        data = _json2.loads(r.data)
+        assert "users" in data
+
+
+def test_admin_create_and_delete_user(monkeypatch):
+    _os3.environ["DISABLE_SCHEDULER"] = "1"
+    monkeypatch.setenv("ADMIN_USER", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "adminpw")
+    monkeypatch.delenv("API_KEY", raising=False)
+    import importlib, app as _a
+    importlib.reload(_a)
+    _a.app.config["TESTING"] = True
+    with _a.app.test_client() as c:
+        c.post("/login", data={"username": "admin", "password": "adminpw"})
+        r = c.post("/admin/users",
+                   json={"username": "newuser_t5", "password": "newpw", "plan": "starter"})
+        assert r.status_code == 201
+        uid = _json2.loads(r.data)["id"]
+        r = c.delete(f"/admin/users/{uid}")
+        assert r.status_code == 200
