@@ -4,6 +4,8 @@ _VALID_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
 def normalize_days(days) -> str:
+    if days is None:
+        raise ValueError("요일이 비어있습니다")
     if isinstance(days, str):
         items = [d.strip() for d in days.split(",") if d.strip()]
     else:
@@ -11,7 +13,8 @@ def normalize_days(days) -> str:
     for d in items:
         if d not in _VALID_DAYS:
             raise ValueError(f"잘못된 요일: {d}")
-    ordered = [d for d in _VALID_DAYS if d in set(items)]
+    items_set = set(items)
+    ordered = [d for d in _VALID_DAYS if d in items_set]
     if not ordered:
         raise ValueError("요일이 비어있습니다")
     return ",".join(ordered)
@@ -30,9 +33,9 @@ def validate_schedule(payload: dict) -> tuple[bool, str]:
     except ValueError as e:
         return False, str(e)
     hour, minute = payload.get("hour"), payload.get("minute")
-    if not isinstance(hour, int) or not (0 <= hour <= 23):
+    if isinstance(hour, bool) or not isinstance(hour, int) or not (0 <= hour <= 23):
         return False, "시(hour)는 0~23"
-    if not isinstance(minute, int) or not (0 <= minute <= 59):
+    if isinstance(minute, bool) or not isinstance(minute, int) or not (0 <= minute <= 59):
         return False, "분(minute)은 0~59"
     if not (payload.get("post_blog") or payload.get("post_instagram")):
         return False, "발행 채널을 최소 1개 선택하세요"

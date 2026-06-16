@@ -35,3 +35,21 @@ def test_validate_no_channel():
     ok, err = validate_schedule({"keywords": ["x"], "days": ["mon"], "hour": 9, "minute": 0,
                                  "post_blog": False, "post_instagram": False})
     assert not ok and "채널" in err
+
+def test_normalize_days_none():
+    with pytest.raises(ValueError):
+        normalize_days(None)
+
+def test_normalize_days_empty_list():
+    with pytest.raises(ValueError):
+        normalize_days([])
+
+def test_validate_missing_days_key():
+    ok, err = validate_schedule({"keywords": ["x"], "hour": 9, "minute": 0,
+                                 "post_blog": True, "post_instagram": False})
+    assert not ok
+
+def test_validate_bool_hour_rejected():
+    ok, err = validate_schedule({"keywords": ["x"], "days": ["mon"], "hour": True, "minute": 0,
+                                 "post_blog": True, "post_instagram": False})
+    assert not ok
