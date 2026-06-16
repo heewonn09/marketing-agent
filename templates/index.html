@@ -1486,8 +1486,8 @@
                 const next = s.next_run ? new Date(s.next_run).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
                 return `<div class="sched-card">
                     <div class="sched-card-info">
-                        <div class="sched-card-name">${s.name || '(이름 없음)'}</div>
-                        <div class="sched-card-meta">${s.keywords.join(', ')} &nbsp;|&nbsp; ${days} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</div>
+                        <div class="sched-card-name">${esc(s.name || '(이름 없음)')}</div>
+                        <div class="sched-card-meta">${esc(s.keywords.join(', '))} &nbsp;|&nbsp; ${days} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</div>
                         <div>
                             ${s.post_blog ? '<span class="sched-badge badge-blog">블로그</span>' : ''}
                             ${s.post_instagram ? '<span class="sched-badge badge-ig">인스타그램</span>' : ''}
