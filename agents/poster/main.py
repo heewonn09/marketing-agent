@@ -493,7 +493,10 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
         except Exception:
             continue
 
-    page.screenshot(path=str(_ROOT / "data" / "poster_final.png"))
+    try:
+        page.screenshot(path=str(_ROOT / "data" / "poster_final.png"), timeout=10000)
+    except Exception:
+        pass  # 발행 후 페이지 이동 중 타임아웃은 무시
     print("블로그 글 발행 완료!")
 
     # 발행 후 URL 수집 (성과 트래킹용)
