@@ -567,7 +567,7 @@ def schedules_create():
     sid = create_schedule(
         name=data.get("name", ""), keywords=[k.strip() for k in data["keywords"] if str(k).strip()],
         days=normalize_days(data["days"]), hour=data["hour"], minute=data["minute"],
-        post_blog=bool(data["post_blog"]), post_instagram=bool(data["post_instagram"]),
+        post_blog=bool(data.get("post_blog", False)), post_instagram=bool(data.get("post_instagram", False)),
         enabled=bool(data.get("enabled", True)))
     sched = get_schedule(sid)
     if sched["enabled"]:
@@ -586,7 +586,7 @@ def schedules_update(sid):
     update_schedule(sid, name=data.get("name", ""),
                     keywords=[k.strip() for k in data["keywords"] if str(k).strip()],
                     days=normalize_days(data["days"]), hour=data["hour"], minute=data["minute"],
-                    post_blog=bool(data["post_blog"]), post_instagram=bool(data["post_instagram"]),
+                    post_blog=bool(data.get("post_blog", False)), post_instagram=bool(data.get("post_instagram", False)),
                     enabled=bool(data.get("enabled", True)))
     sched = get_schedule(sid)
     _unschedule(sid)
