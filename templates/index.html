@@ -666,6 +666,27 @@
         .sidebar .step-group-label { font-size: 10px; color: #a0aec0; font-weight: 600; padding: 6px 0 2px; text-transform: uppercase; }
         .sidebar .step-time { margin-left: auto; font-size: 10px; color: #cbd5e0; }
         .sidebar #log { font-size: 11px; color: #718096; margin-top: 8px; max-height: 80px; overflow-y: auto; line-height: 1.6; }
+
+        /* ── KPI 카드 ── */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .kpi-card {
+            background: #fff;
+            border-radius: var(--card-radius);
+            box-shadow: var(--shadow-sm);
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .kpi-label { font-size: 12px; font-weight: 600; color: #a0aec0; letter-spacing: 0.4px; }
+        .kpi-value { font-size: 28px; font-weight: 700; color: #1a202c; line-height: 1; }
+        .kpi-value.small { font-size: 16px; word-break: break-all; }
+        .kpi-card.kpi-error .kpi-value { color: #e53e3e; }
+        .kpi-card.kpi-success .kpi-value { color: #38a169; }
     </style>
 </head>
 <body>
@@ -721,8 +742,33 @@
 
         <main class="main-area">
 
-            <!-- KPI 카드 (Task 3에서 채움) -->
-            <div id="kpi-section"></div>
+            <!-- KPI 카드 -->
+            <div class="kpi-grid" id="kpi-section">
+                <div class="kpi-card">
+                    <div class="kpi-label">전체 실행</div>
+                    <div class="kpi-value" id="kpi-total">—</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">이번 주</div>
+                    <div class="kpi-value" id="kpi-week">—</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">최다 키워드</div>
+                    <div class="kpi-value small" id="kpi-topkw">—</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">평균 소요</div>
+                    <div class="kpi-value small" id="kpi-avg-dur">—</div>
+                </div>
+                <div class="kpi-card kpi-success">
+                    <div class="kpi-label">성공률</div>
+                    <div class="kpi-value" id="kpi-success">—</div>
+                </div>
+                <div class="kpi-card kpi-error">
+                    <div class="kpi-label">오류</div>
+                    <div class="kpi-value" id="kpi-error">—</div>
+                </div>
+            </div>
 
             <div class="results-panel" id="results-panel">
 
@@ -1520,20 +1566,20 @@
 
     function loadStats() {
         fetch('/stats').then(r => r.json()).then(s => {
-            document.getElementById('stat-total').textContent  = s.total ?? '—';
-            document.getElementById('stat-week').textContent   = s.week_jobs ?? '—';
-            document.getElementById('stat-topkw').textContent  = s.top_keyword || '—';
+            document.getElementById('kpi-total').textContent   = s.total ?? '—';
+            document.getElementById('kpi-week').textContent    = s.week_jobs ?? '—';
+            document.getElementById('kpi-topkw').textContent   = s.top_keyword || '—';
+            document.getElementById('kpi-success').textContent = (s.success_rate != null) ? s.success_rate + '%' : '—';
+            document.getElementById('kpi-error').textContent   = s.error ?? '—';
 
             if (s.avg_duration_seconds) {
                 const m = Math.floor(s.avg_duration_seconds / 60);
                 const sec = s.avg_duration_seconds % 60;
-                document.getElementById('stat-avg-dur').textContent = `${m}분 ${sec}초`;
+                document.getElementById('kpi-avg-dur').textContent = `${m}분 ${sec}초`;
             }
 
             if (s.total > 0) {
                 document.getElementById('sb-chart-section').style.display = 'flex';
-
-                // 도넛 중앙 성공률
                 document.getElementById('donut-success-val').textContent = (s.success_rate ?? 0) + '%';
 
                 const pending = Math.max(0, s.total - s.done - (s.error || 0));
@@ -1541,7 +1587,6 @@
                 const labels  = ['완료', '오류', '기타'];
                 const colors  = ['#38a169', '#e53e3e', '#a0aec0'];
 
-                // 인라인 범례 (도넛 오른쪽)
                 const legend = document.getElementById('chart-legend');
                 legend.innerHTML = '';
                 labels.forEach((l, i) => {
@@ -1556,7 +1601,7 @@
                     data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] },
                     options: {
                         responsive: false,
-                        rotation: -90, // 완료(초록) 세그먼트가 12시 방향부터 시작
+                        rotation: -90,
                         plugins: { legend: { display: false }, tooltip: { callbacks: {
                             label: c => ` ${c.label}: ${c.parsed}`
                         }}},
