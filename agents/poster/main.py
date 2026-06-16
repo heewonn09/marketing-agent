@@ -463,17 +463,19 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
                 raise RuntimeError("세션 만료 — .env에 NAVER_PW 필요")
             _do_login(page, naver_id, naver_pw)
             print("재로그인 후 에디터 재접속...")
-            page.goto(editor_url, wait_until="domcontentloaded", timeout=25000)
+            time.sleep(3.0)  # 로그인 처리 완전 완료 대기
+            page.goto(editor_url, wait_until="domcontentloaded", timeout=30000)
+            time.sleep(2.0)  # 에디터 React 초기화 시간 확보
 
     _goto_editor()
 
     # 도움말·팝업 먼저 닫기 (se-container 로딩을 가리는 경우 방지)
     _close_help_popup(page)
     _dismiss_all_popups(page)
-    time.sleep(0.8)
+    time.sleep(1.5)
 
     # 에디터 완전 로딩 대기 (재로그인 후 React 초기화 시간 확보)
-    page.wait_for_selector(".se-container", timeout=35000)
+    page.wait_for_selector(".se-container", timeout=60000)
     time.sleep(2.0)
 
     # 팝업 재확인 (se-container 로딩 후 새로 뜨는 팝업 처리)
