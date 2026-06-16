@@ -454,6 +454,42 @@
             opacity: 1; pointer-events: auto;
         }
 
+        /* 필터 탭 */
+        .hist-filter-tabs { display:flex; gap:0; border-bottom:1px solid #edf2f7; padding:0 20px; }
+        .hist-tab { padding:8px 14px; font-size:12px; font-weight:600; color:#a0aec0; cursor:pointer; border-bottom:2px solid transparent; background:none; border-top:none; border-left:none; border-right:none; font-family:inherit; transition:all 0.15s; white-space:nowrap; }
+        .hist-tab:hover { color:#667eea; }
+        .hist-tab.active { color:#667eea; border-bottom-color:#667eea; }
+
+        /* 컨트롤 바 (검색+날짜+정렬) */
+        .hist-control-bar { display:flex; gap:8px; padding:10px 20px; border-bottom:1px solid #edf2f7; flex-wrap:wrap; }
+        .hist-search { flex:1; min-width:120px; padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-family:inherit; outline:none; }
+        .hist-search:focus { border-color:#667eea; }
+        .hist-date { padding:6px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-family:inherit; color:#4a5568; outline:none; }
+        .hist-date:focus { border-color:#667eea; }
+        .hist-sort-select { padding:6px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-family:inherit; color:#4a5568; outline:none; cursor:pointer; }
+
+        /* 에러 툴팁 */
+        .hi-error-wrap { position:relative; display:inline-block; }
+        .hi-error-badge { display:inline-block; padding:2px 7px; background:#fff5f5; border:1px solid #fed7d7; border-radius:4px; font-size:10px; font-weight:600; color:#e53e3e; cursor:default; margin-top:3px; }
+        .hi-tooltip { display:none; position:absolute; left:0; top:calc(100% + 4px); background:#2d3748; color:white; font-size:11px; padding:6px 10px; border-radius:6px; white-space:pre-wrap; max-width:260px; word-break:break-word; z-index:200; line-height:1.4; }
+        .hi-error-wrap:hover .hi-tooltip { display:block; }
+
+        /* 페이지네이션 */
+        .hist-pagination { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 20px; border-top:1px solid #edf2f7; }
+        .hist-page-btn { padding:5px 12px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; color:#4a5568; cursor:pointer; font-family:inherit; transition:all 0.15s; }
+        .hist-page-btn:hover:not(:disabled) { background:#667eea; color:white; border-color:#667eea; }
+        .hist-page-btn:disabled { opacity:0.35; cursor:not-allowed; }
+        .hist-page-info { font-size:12px; color:#718096; font-weight:600; }
+        .hist-per-page { padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-family:inherit; color:#4a5568; outline:none; }
+
+        /* 버튼 어포던스 */
+        .btn-hist:focus-visible, .btn-pub-link:focus-visible, .hist-page-btn:focus-visible { outline:2px solid #667eea; outline-offset:2px; }
+        .btn-hist.rerun { transition:all 0.15s; }
+        .btn-hist.rerun:hover { animation:histRerunSpin 0.4s ease; }
+        .btn-hist.approve { animation:histApprovePulse 2s ease-in-out infinite; }
+        @keyframes histRerunSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes histApprovePulse { 0%,100%{box-shadow:0 0 0 0 rgba(56,161,105,0.4)} 50%{box-shadow:0 0 0 5px rgba(56,161,105,0)} }
+
         /* ── 토스트 ────────────────────────────────────────────── */
         #toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -687,6 +723,76 @@
         .kpi-value.small { font-size: 16px; word-break: break-all; }
         .kpi-card.kpi-error .kpi-value { color: #e53e3e; }
         .kpi-card.kpi-success .kpi-value { color: #38a169; }
+
+        /* ── 히스토리 카드 ── */
+        .history-card {
+            background: #fff;
+            border-radius: var(--card-radius);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+        .hist-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; border-bottom: 1px solid #f0f4f8; gap: 12px; flex-wrap: wrap; }
+        .hist-header-title { font-size: 14px; font-weight: 700; color: #1a202c; }
+        .hist-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .hist-filter-tabs { display: flex; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        .hist-tab { padding: 5px 12px; font-size: 12px; font-weight: 500; color: #718096; background: none; border: none; cursor: pointer; border-right: 1px solid #e2e8f0; white-space: nowrap; }
+        .hist-tab:last-child { border-right: none; }
+        .hist-tab.active { background: #667eea; color: #fff; font-weight: 600; }
+        .hist-search { padding: 5px 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; outline: none; width: 160px; }
+        .hist-search:focus { border-color: #667eea; }
+        .hist-period { padding: 5px 8px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12px; color: #4a5568; outline: none; cursor: pointer; }
+        .btn-refresh-sm { font-size: 11px; color: #a0aec0; background: none; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+        .btn-refresh-sm:hover { background: #f7fafc; }
+        .hist-table-wrap { max-height: 520px; overflow-y: auto; }
+        .hist-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .hist-table th { position: sticky; top: 0; background: #f7f8fc; padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: #a0aec0; letter-spacing: 0.5px; border-bottom: 1px solid #e8ecf0; white-space: nowrap; }
+        .hist-table td { padding: 10px 14px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; }
+        .hist-table tbody tr:hover { background: #f9fafb; }
+        .hist-table tbody tr:last-child td { border-bottom: none; }
+        .hi-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; flex-shrink: 0; }
+        .hi-dot.done { background: #38a169; }
+        .hi-dot.running, .hi-dot.posting { background: #667eea; }
+        .hi-dot.pendingapproval { background: #ed8936; }
+        .hi-dot.error { background: #e53e3e; }
+        .hi-dot.interrupted, .hi-dot.rejected { background: #a0aec0; }
+        .status-cell { position: relative; white-space: nowrap; }
+        .hi-status-label { font-size: 12px; color: #4a5568; }
+        .error-tooltip {
+            display: none; position: absolute; left: 0; top: 100%; margin-top: 4px; z-index: 50;
+            background: #1a202c; color: #fff; font-size: 11px; padding: 8px 10px;
+            border-radius: 8px; min-width: 220px; max-width: 300px; line-height: 1.5;
+            box-shadow: var(--shadow-md); white-space: normal; pointer-events: none;
+        }
+        .error-tooltip::before { content: ''; position: absolute; left: 10px; top: -5px; border: 5px solid transparent; border-bottom-color: #1a202c; border-top: none; }
+        .status-cell:hover .error-tooltip { display: block; }
+        .platform-link { display: inline-flex; align-items: center; margin-right: 4px; opacity: 0.7; }
+        .platform-link:hover { opacity: 1; }
+        .hist-empty { text-align: center; padding: 48px; color: #a0aec0; font-size: 13px; }
+        .btn-hist-view { font-size: 12px; padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer; background: #3b5bdb; color: #fff; font-weight: 600; margin-right: 4px; }
+        .btn-hist-view:hover { background: #364fc7; }
+        .btn-hist-approve { font-size: 12px; padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer; background: #38a169; color: #fff; font-weight: 600; margin-right: 4px; }
+        .btn-hist-approve:hover { background: #2f855a; }
+        .btn-hist-rerun { font-size: 14px; padding: 2px 8px; border-radius: 6px; border: 1px solid #e2e8f0; cursor: pointer; background: none; color: #718096; }
+        .btn-hist-rerun:hover { background: #f0f4f8; }
+        .btn-hist-warn { font-size: 11px; padding: 4px 8px; border-radius: 6px; border: 1px solid #fed7aa; cursor: pointer; background: #fff7ed; color: #c05621; font-weight: 600; }
+        .btn-hist-warn:hover { background: #feecdc; }
+        /* ── 페이지네이션 ── */
+        .pagination { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 12px; border-top: 1px solid #f0f4f8; }
+        .page-btn { min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; background: none; cursor: pointer; color: #4a5568; }
+        .page-btn:hover { background: #f0f4f8; }
+        .page-btn.active { background: #667eea; color: #fff; border-color: #667eea; font-weight: 700; }
+        .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        /* ── 스켈레톤 ── */
+        @keyframes skeleton-shimmer {
+            0%   { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+        .skeleton-row {
+            height: 52px; border-radius: 8px; margin-bottom: 8px;
+            background: linear-gradient(90deg, #f0f4f8 25%, #e8ecf0 50%, #f0f4f8 75%);
+            background-size: 800px 100%;
+            animation: skeleton-shimmer 1.2s infinite;
+        }
     </style>
 </head>
 <body>
@@ -823,17 +929,42 @@
 
             </div>
 
-            <!-- 히스토리 (Task 4에서 채움) -->
-            <div id="history-list-placeholder">
-                <div class="history-section">
-                    <div class="history-header">
-                        <span class="history-header-title">최근 실행 히스토리</span>
-                        <button class="btn-refresh" onclick="loadHistory()">↻ 새로고침</button>
-                    </div>
-                    <div id="history-list">
-                        <div class="history-empty">불러오는 중...</div>
+            <!-- 히스토리 -->
+            <div class="history-card">
+                <div class="hist-header">
+                    <span class="hist-header-title">실행 히스토리</span>
+                    <div class="hist-controls">
+                        <div class="hist-filter-tabs">
+                            <button class="hist-tab active" data-filter="all">전체</button>
+                            <button class="hist-tab" data-filter="done">완료</button>
+                            <button class="hist-tab" data-filter="error">오류</button>
+                        </div>
+                        <input class="hist-search" id="hist-search" type="text" placeholder="키워드 검색..." />
+                        <select class="hist-period" id="hist-period">
+                            <option value="7">7일</option>
+                            <option value="30">30일</option>
+                            <option value="all" selected>전체</option>
+                        </select>
+                        <button class="btn-refresh-sm" onclick="loadHistory()">↻</button>
                     </div>
                 </div>
+                <div class="hist-table-wrap">
+                    <table class="hist-table">
+                        <thead>
+                            <tr>
+                                <th>상태</th>
+                                <th>키워드</th>
+                                <th>날짜</th>
+                                <th>소요</th>
+                                <th>액션</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-list">
+                            <tr><td colspan="5" class="hist-empty">불러오는 중...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="hist-pagination"></div>
             </div>
 
             <!-- 예약 관리 -->
@@ -1424,83 +1555,125 @@
     }
 
     // ── 히스토리 ─────────────────────────────────────────────
+    const SVG_NAVER = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#03C75A"/><path d="M13.5 12.3L10.3 7H7v10h3.5v-5.3L13.7 17H17V7h-3.5z" fill="white"/></svg>`;
+    const SVG_INSTA = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="url(#ig)"/><defs><linearGradient id="ig" x1="0" y1="24" x2="24" y2="0"><stop stop-color="#f09433"/><stop offset=".25" stop-color="#e6683c"/><stop offset=".5" stop-color="#dc2743"/><stop offset=".75" stop-color="#cc2366"/><stop offset="1" stop-color="#bc1888"/></linearGradient></defs><circle cx="12" cy="12" r="4" stroke="white" stroke-width="1.8" fill="none"/><circle cx="17.5" cy="6.5" r="1.2" fill="white"/><rect x="4" y="4" width="16" height="16" rx="5" stroke="white" stroke-width="1.5" fill="none"/></svg>`;
+
+    let histFilter = 'all';
+    let histSearch = '';
+    let histPeriod = 'all';
+    let histAllJobs = [];
+    let histPage = 1;
+    const HIST_PAGE_SIZE = 10;
+
     function loadHistory() {
         fetch('/history').then(r=>r.json()).then(jobs=>{
-            const list = document.getElementById('history-list');
-            if (!jobs.length) { list.innerHTML='<div class="history-empty">실행 기록이 없습니다.</div>'; return; }
-            list.innerHTML='';
-
-            // 날짜별 그룹핑
-            const todayStr = new Date().toISOString().slice(0,10);
-            const yesterdayStr = new Date(Date.now()-86400000).toISOString().slice(0,10);
-            const groups = {};
-            const order = [];
-            jobs.forEach(job => {
-                const dateKey = (job.created_at || '').slice(0,10) || '—';
-                if (!groups[dateKey]) { groups[dateKey] = []; order.push(dateKey); }
-                groups[dateKey].push(job);
-            });
-            order.forEach(date => {
-                const header = document.createElement('div');
-                header.className = 'history-date-group';
-                if (date === todayStr)       header.textContent = '오늘';
-                else if (date === yesterdayStr) header.textContent = '어제';
-                else                         header.textContent = date;
-                list.appendChild(header);
-                groups[date].forEach(job => list.appendChild(buildHistoryItem(job)));
-            });
+            histAllJobs = jobs;
+            histPage = 1;
+            renderHistory();
         }).catch(()=>{});
     }
 
-    function buildHistoryItem(job) {
-        const item = document.createElement('div');
-        item.className = 'history-item';
+    function renderHistory() {
+        const tbody = document.getElementById('history-list');
+        let jobs = histAllJobs;
+
+        if (histPeriod !== 'all') {
+            const cutoff = Date.now() - parseInt(histPeriod) * 86400000;
+            jobs = jobs.filter(j => new Date(j.created_at||0).getTime() >= cutoff);
+        }
+        if (histFilter !== 'all') {
+            jobs = jobs.filter(j => j.status === histFilter);
+        }
+        if (histSearch.trim()) {
+            const q = histSearch.toLowerCase();
+            jobs = jobs.filter(j => (j.keywords||[]).some(k => k.toLowerCase().includes(q)));
+        }
+
+        if (!jobs.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="hist-empty">실행 기록이 없습니다.</td></tr>';
+            document.getElementById('hist-pagination').innerHTML = '';
+            return;
+        }
+
+        const totalPages = Math.max(1, Math.ceil(jobs.length / HIST_PAGE_SIZE));
+        if (histPage > totalPages) histPage = totalPages;
+        const pageJobs = jobs.slice((histPage - 1) * HIST_PAGE_SIZE, histPage * HIST_PAGE_SIZE);
+
+        tbody.innerHTML = '';
+        pageJobs.forEach(job => tbody.appendChild(buildHistoryRow(job)));
+        renderPagination(jobs.length, histPage, totalPages);
+    }
+
+    function renderPagination(total, page, totalPages) {
+        const el = document.getElementById('hist-pagination');
+        if (totalPages <= 1) { el.innerHTML = ''; return; }
+        let html = `<button class="page-btn" onclick="histPage=${Math.max(1,page-1)};renderHistory()" ${page===1?'disabled':''}>‹</button>`;
+        const start = Math.max(1, page - 2);
+        const end   = Math.min(totalPages, page + 2);
+        if (start > 1) html += `<button class="page-btn" onclick="histPage=1;renderHistory()">1</button>${start > 2 ? '<span style="padding:0 4px;color:#a0aec0">…</span>' : ''}`;
+        for (let i = start; i <= end; i++) {
+            html += `<button class="page-btn ${i===page?'active':''}" onclick="histPage=${i};renderHistory()">${i}</button>`;
+        }
+        if (end < totalPages) html += `${end < totalPages - 1 ? '<span style="padding:0 4px;color:#a0aec0">…</span>' : ''}<button class="page-btn" onclick="histPage=${totalPages};renderHistory()">${totalPages}</button>`;
+        html += `<button class="page-btn" onclick="histPage=${Math.min(totalPages,page+1)};renderHistory()" ${page===totalPages?'disabled':''}>›</button>`;
+        el.innerHTML = html;
+    }
+
+    function buildHistoryRow(job) {
         const LABELS = { done:'완료', running:'실행 중', error:'오류', interrupted:'중단',
                          pending_approval:'승인 대기', posting:'게시 중', rejected:'거절됨' };
         const statusLabel = LABELS[job.status] || job.status;
-        const kws    = (job.keywords||[]).join(', ') || '(지정되지 않음)';
+        const kws    = (job.keywords||[]).join(', ') || '(미지정)';
         const dateStr = job.date || '';
-        // 날짜 그룹 헤더에서 날짜를 표시하므로 시각만 표시
-        const timeStr = job.created_at ? job.created_at.slice(11,16) : '';
-        const dotCls  = job.status.replace(/_/g,'');
+        const dtStr  = job.created_at ? job.created_at.slice(0,16).replace('T',' ') : '—';
+        const dotCls = job.status.replace(/_/g,'');
 
-        let durStr = '';
+        let durStr = '—';
         if (job.duration_seconds) {
             const m = Math.floor(job.duration_seconds / 60);
             const s = job.duration_seconds % 60;
-            durStr = ` · ${m}분 ${s}초`;
+            durStr = `${m}분 ${s}초`;
         }
 
-        let errorTag = '';
+        const sameKwJobs = histAllJobs.filter(j => (j.keywords||[]).join(',') === (job.keywords||[]).join(','));
+        const idx = sameKwJobs.findIndex(j => j.job_id === job.job_id);
+        const last3 = sameKwJobs.slice(0, idx + 1).slice(-3);
+        const tripleError = last3.length === 3 && last3.every(j => j.status === 'error');
+
+        let tooltipHtml = '';
         if (job.status === 'error' && job.error_message) {
-            errorTag = `<div class="hi-error-tag">${esc(job.error_message.slice(0,60))}</div>`;
+            tooltipHtml = `<div class="error-tooltip">${esc(job.error_message)}</div>`;
         }
 
-        // Primary 액션 (항상 노출)
-        let primaryHtml = '';
+        let actionHtml = '';
         if (job.status === 'done' && dateStr)
-            primaryHtml += `<button class="btn-hist" onclick="showResult('${dateStr}',${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
+            actionHtml += `<button class="btn-hist-view" onclick="showResult('${dateStr}',${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
         if (job.status === 'pending_approval')
-            primaryHtml += `<button class="btn-hist approve" onclick="showApproval('${job.job_id}',${JSON.stringify(job.keywords||[])},'${dateStr}')">✓ 승인하기</button>`;
-
-        // Secondary 액션 (hover 시 노출)
-        let secondaryHtml = '';
-        if (job.keywords?.length && !['running','posting'].includes(job.status))
-            secondaryHtml += `<button class="hi-icon-btn hi-secondary" title="재실행" onclick="rerunJob('${job.job_id}')">↺</button>`;
+            actionHtml += `<button class="btn-hist-approve" onclick="showApproval('${job.job_id}',${JSON.stringify(job.keywords||[])},'${dateStr}')">✓ 승인</button>`;
+        if (job.keywords?.length && !['running','posting'].includes(job.status)) {
+            if (tripleError) {
+                actionHtml += `<button class="btn-hist-warn" onclick="document.getElementById('schedule-section').open=true;document.getElementById('schedule-section').scrollIntoView({behavior:'smooth'})">설정 점검하기</button>`;
+            } else {
+                actionHtml += `<button class="btn-hist-rerun" title="재실행" onclick="rerunJob('${job.job_id}')">↺</button>`;
+            }
+        }
         if (job.naver_post_url)
-            secondaryHtml += `<a class="btn-pub-link hi-secondary" href="${esc(job.naver_post_url)}" target="_blank" rel="noopener" title="네이버 블로그 보기">📝</a>`;
+            actionHtml += `<a class="platform-link" href="${esc(job.naver_post_url)}" target="_blank" rel="noopener" title="네이버 블로그">${SVG_NAVER}</a>`;
         if (job.instagram_permalink)
-            secondaryHtml += `<a class="btn-pub-link hi-secondary" href="${esc(job.instagram_permalink)}" target="_blank" rel="noopener" title="인스타그램 보기">📸</a>`;
+            actionHtml += `<a class="platform-link" href="${esc(job.instagram_permalink)}" target="_blank" rel="noopener" title="인스타그램">${SVG_INSTA}</a>`;
 
-        item.innerHTML = `
-            <div class="hi-dot ${dotCls}"></div>
-            <div class="hi-info">
-                <div class="hi-kw">${esc(kws)}</div>
-                <div class="hi-meta">${statusLabel} · ${timeStr}${durStr}</div>
-                ${errorTag}
-            </div>
-            <div class="hi-actions">${primaryHtml}${secondaryHtml}</div>`;
-        return item;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="status-cell">
+                <span class="hi-dot ${dotCls}"></span>
+                <span class="hi-status-label">${statusLabel}</span>
+                ${tooltipHtml}
+            </td>
+            <td>${esc(kws)}</td>
+            <td style="white-space:nowrap;color:#718096;font-size:12px">${esc(dtStr)}</td>
+            <td style="white-space:nowrap;color:#718096;font-size:12px">${esc(durStr)}</td>
+            <td style="white-space:nowrap">${actionHtml}</td>`;
+        return tr;
     }
 
     function showResult(reportDate, keywords) {
@@ -1697,6 +1870,8 @@
     })();
 
     function loadSchedules() {
+        document.getElementById('sched-list').innerHTML =
+            '<div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div>';
         fetch('/schedules').then(r => r.json()).then(list => {
             const el = document.getElementById('sched-list');
             if (!list.length) { el.innerHTML = '<div class="sched-empty">예약된 항목이 없습니다.<br><span style="font-size:11px">위 버튼으로 첫 예약을 추가해보세요.</span></div>'; return; }
@@ -1809,6 +1984,29 @@
 
     document.getElementById('schedule-section').addEventListener('toggle', e => {
         if (e.target.open) loadSchedules();
+    });
+
+    // 히스토리 필터 이벤트
+    document.querySelectorAll('.hist-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.hist-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            histFilter = btn.dataset.filter;
+            histPage = 1;
+            renderHistory();
+        });
+    });
+    const histSearchEl = document.getElementById('hist-search');
+    if (histSearchEl) histSearchEl.addEventListener('input', e => {
+        histSearch = e.target.value;
+        histPage = 1;
+        renderHistory();
+    });
+    const histPeriodEl = document.getElementById('hist-period');
+    if (histPeriodEl) histPeriodEl.addEventListener('change', e => {
+        histPeriod = e.target.value;
+        histPage = 1;
+        renderHistory();
     });
 
     loadHistory();
