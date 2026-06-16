@@ -20,7 +20,9 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 load_dotenv(Path(__file__).parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).parent))
-from utils.job_store import init_db, upsert_job, get_job, list_jobs, get_stats
+from utils.job_store import (init_db, upsert_job, get_job, list_jobs, get_stats,
+                             create_schedule, get_schedule, list_schedules,
+                             update_schedule, delete_schedule)
 from utils.cleanup import cleanup_old_files
 from utils.backup import backup_state
 from utils.notifier import notify_done, notify_error, notify_approval_pending
@@ -196,28 +198,31 @@ def _run_cmd(job_id: str, name: str, script: str, args: list[str], fatal: bool =
     return True
 
 
-def _run_pipeline_part2(job_id: str, keywords: list[str], today: str) -> None:
+def _run_pipeline_part2(job_id: str, keywords: list[str], today: str,
+                        post_blog: bool = True, post_instagram: bool = True) -> None:
     """포스팅 + 인스타그램 (승인 후 실행)"""
-    for keyword in keywords:
-        ok = _run_cmd(job_id, f"포스팅 [{keyword}]", "agents/poster/main.py",
-                      ["--keyword", keyword, "--date", today], fatal=False)
-        if not ok:
-            jobs[job_id]["queue"].put(
-                "LOG:[poster] 네이버 봇 감지 또는 로그인 실패 — 로컬에서 별도 실행 필요. 다음 스텝 계속 진행."
-            )
+    if post_blog:
+        for keyword in keywords:
+            ok = _run_cmd(job_id, f"포스팅 [{keyword}]", "agents/poster/main.py",
+                          ["--keyword", keyword, "--date", today], fatal=False)
+            if not ok:
+                jobs[job_id]["queue"].put(
+                    "LOG:[poster] 네이버 봇 감지 또는 로그인 실패 — 로컬에서 별도 실행 필요. 다음 스텝 계속 진행."
+                )
 
-    for keyword in keywords:
-        safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
-        cardnews_ready = all(
-            (ROOT / "output" / f"cardnews_{safe_kw}_{today}_{i}.png").exists()
-            for i in range(1, 5)
-        )
-        ig_args = ["--keyword", keyword, "--date", today]
-        if cardnews_ready:
-            ig_args.append("--carousel")
-            jobs[job_id]["queue"].put("LOG:[instagram] 카드뉴스 4장 감지 → 캐러셀 업로드")
-        if not _run_cmd(job_id, f"인스타그램 [{keyword}]", "agents/instagram/main.py", ig_args):
-            return
+    if post_instagram:
+        for keyword in keywords:
+            safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
+            cardnews_ready = all(
+                (ROOT / "output" / f"cardnews_{safe_kw}_{today}_{i}.png").exists()
+                for i in range(1, 5)
+            )
+            ig_args = ["--keyword", keyword, "--date", today]
+            if cardnews_ready:
+                ig_args.append("--carousel")
+                jobs[job_id]["queue"].put("LOG:[instagram] 카드뉴스 4장 감지 → 캐러셀 업로드")
+            if not _run_cmd(job_id, f"인스타그램 [{keyword}]", "agents/instagram/main.py", ig_args):
+                return
 
     jobs[job_id]["status"] = "done"
     jobs[job_id]["date"] = today
@@ -248,7 +253,8 @@ def _run_per_keyword(job_id: str, keyword: str, fatal: bool = True) -> bool:
     return True
 
 
-def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False) -> None:
+def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False,
+                 post_blog: bool = True, post_instagram: bool = True) -> None:
     import concurrent.futures
     today = date.today().isoformat()
 
@@ -285,14 +291,15 @@ def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False) -> N
         if not _run_cmd(job_id, name, script, step_args):
             return
 
-    for keyword in keywords:
-        ok = _run_cmd(job_id, f"카드뉴스 [{keyword}]", "agents/cardnews/main.py",
-                      ["--keyword", keyword, "--date", today], fatal=False)
-        if not ok:
-            jobs[job_id]["queue"].put("LOG:[cardnews] 카드뉴스 생성 실패 — 다음 스텝 계속 진행.")
+    if post_instagram:
+        for keyword in keywords:
+            ok = _run_cmd(job_id, f"카드뉴스 [{keyword}]", "agents/cardnews/main.py",
+                          ["--keyword", keyword, "--date", today], fatal=False)
+            if not ok:
+                jobs[job_id]["queue"].put("LOG:[cardnews] 카드뉴스 생성 실패 — 다음 스텝 계속 진행.")
 
     if auto_post:
-        _run_pipeline_part2(job_id, keywords, today)
+        _run_pipeline_part2(job_id, keywords, today, post_blog, post_instagram)
     else:
         # 승인 대기 — 프론트엔드가 /approve/<job_id>를 호출할 때까지 큐 유지
         jobs[job_id]["status"] = "pending_approval"
@@ -539,23 +546,41 @@ def download(report_date: str):
 
 # ── 스케줄러 ───────────────────────────────────────────────────────────────
 
-def scheduled_run():
-    keywords_env = os.environ.get("SCHEDULED_KEYWORDS", "")
-    keywords = [k.strip() for k in keywords_env.split(",") if k.strip()]
-    if not keywords:
-        print("[scheduler] SCHEDULED_KEYWORDS가 설정되지 않아 실행 생략")
+def scheduled_run(schedule_id: int):
+    sched = get_schedule(schedule_id)
+    if not sched or not sched["enabled"]:
+        print(f"[scheduler] 스케줄 {schedule_id} 없음/비활성 — 생략")
         return
-    print(f"[scheduler] 자동 실행 시작: {keywords}")
+    keywords = sched["keywords"]
+    if not keywords:
+        return
+    print(f"[scheduler] 자동 실행: id={schedule_id} {keywords}")
     job_id = uuid.uuid4().hex[:8]
     jobs[job_id] = {
         "status": "running", "queue": queue.Queue(), "date": None,
-        "keywords": keywords, "last_step": None,
-        "started_at": time.time(),
+        "keywords": keywords, "last_step": None, "started_at": time.time(),
+        "schedule_id": schedule_id,
         "naver_post_url": None, "instagram_media_id": None, "instagram_permalink": None,
     }
     upsert_job(job_id, "running", keywords)
-    # 스케줄러는 승인 없이 자동 게시
-    threading.Thread(target=run_pipeline, args=(job_id, keywords, True), daemon=True).start()
+    threading.Thread(target=run_pipeline, args=(job_id, keywords),
+                     kwargs={"auto_post": True, "post_blog": sched["post_blog"],
+                             "post_instagram": sched["post_instagram"]}, daemon=True).start()
+
+
+def _apply_schedule(sched: dict):
+    from utils.schedule_util import cron_kwargs
+    scheduler.add_job(
+        scheduled_run, CronTrigger(timezone="Asia/Seoul", **cron_kwargs(sched["days"], sched["hour"], sched["minute"])),
+        args=[sched["id"]], id=f"sched_{sched['id']}",
+        replace_existing=True, coalesce=True, max_instances=1)
+
+
+def _unschedule(schedule_id: int):
+    try:
+        scheduler.remove_job(f"sched_{schedule_id}")
+    except Exception:
+        pass
 
 
 def _run_cleanup():
@@ -579,6 +604,9 @@ scheduler.add_job(_run_cleanup, CronTrigger(hour=2, minute=0, timezone="Asia/Seo
 # 기존 매일 09:00 scheduled_run 잡은 제거 (웹 스케줄로 대체)
 
 if os.environ.get("DISABLE_SCHEDULER") != "1":
+    for _s in list_schedules():
+        if _s["enabled"]:
+            _apply_schedule(_s)
     scheduler.start()
 
 
