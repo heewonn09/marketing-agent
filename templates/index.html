@@ -841,6 +841,12 @@
             <!-- 진행 상황 -->
             <div id="progress-card">
                 <div class="card-title">진행 상황</div>
+                <div id="eta-bar" style="display:none;align-items:center;gap:10px;padding:6px 0 10px;font-size:11px;color:#718096;border-bottom:1px solid #edf2f7;margin-bottom:8px">
+                    <span style="font-size:13px">⏱</span>
+                    <span id="eta-elapsed" style="font-weight:600;color:#4a5568">0:00</span>
+                    <span style="opacity:0.35">|</span>
+                    <span id="eta-remain" style="color:#a0aec0">준비 중...</span>
+                </div>
                 <div class="steps" id="steps-container"></div>
                 <div id="log"></div>
             </div>
@@ -1057,16 +1063,16 @@
     // ── 스텝 정의 ──────────────────────────────────────────────
     const STEPS_DEF = [
         { group: 'Part 1 — 콘텐츠 생성', steps: [
-            { id: 'step-collect',  label: '수집',     sub: 'collector', time: '~30초' },
-            { id: 'step-analyze',  label: '분석',     sub: 'analyzer',  time: '~1분'  },
-            { id: 'step-write',    label: '작성',     sub: 'writer',    time: '~45초' },
-            { id: 'step-report',   label: '리포트',   sub: 'reporter',  time: '~2분'  },
-            { id: 'step-monitor',  label: '모니터',   sub: 'monitor',   time: '~30초' },
-            { id: 'step-cardnews', label: '카드뉴스', sub: 'cardnews',  time: '~1분'  },
+            { id: 'step-collect',  label: '수집',     sub: 'collector', time: '~30초', secs: 25 },
+            { id: 'step-analyze',  label: '분석',     sub: 'analyzer',  time: '~1분',  secs: 45 },
+            { id: 'step-write',    label: '작성',     sub: 'writer',    time: '~45초', secs: 35 },
+            { id: 'step-report',   label: '리포트',   sub: 'reporter',  time: '~2분',  secs: 60 },
+            { id: 'step-monitor',  label: '모니터',   sub: 'monitor',   time: '~30초', secs: 20 },
+            { id: 'step-cardnews', label: '카드뉴스', sub: 'cardnews',  time: '~1분',  secs: 90 },
         ]},
         { group: 'Part 2 — 발행 (승인 후)', steps: [
-            { id: 'step-post',      label: '포스팅',     sub: 'poster',    time: '~30초' },
-            { id: 'step-instagram', label: '인스타그램', sub: 'instagram', time: '~1분'  },
+            { id: 'step-post',      label: '포스팅',     sub: 'poster',    time: '~30초', secs: 30 },
+            { id: 'step-instagram', label: '인스타그램', sub: 'instagram', time: '~1분',  secs: 30 },
         ]},
     ];
     const STEP_MAP = {
@@ -1086,6 +1092,49 @@
     let currentJobId     = null;
     let activeStream     = null;
     let inPendingState   = false;   // 승인 대기 중 플래그
+
+    // ── ETA 추적 ─────────────────────────────────────────────
+    let _etaStart  = null;
+    let _etaTimer  = null;
+    let _doneSteps = new Set();
+
+    function _fmtSec(s) {
+        const m = Math.floor(s / 60);
+        const ss = String(s % 60).padStart(2, '0');
+        return m > 0 ? `${m}분 ${ss}초` : `${ss}초`;
+    }
+
+    function _updateEta() {
+        if (!_etaStart) return;
+        const elapsed = Math.floor((Date.now() - _etaStart) / 1000);
+        const em = Math.floor(elapsed / 60);
+        const es = String(elapsed % 60).padStart(2, '0');
+        document.getElementById('eta-elapsed').textContent = `${em}:${es} 경과`;
+
+        const allSteps = STEPS_DEF.flatMap(g => g.steps);
+        const remaining = allSteps
+            .filter(s => !_doneSteps.has(s.id))
+            .reduce((sum, s) => sum + s.secs, 0);
+        const remEl = document.getElementById('eta-remain');
+        remEl.textContent = remaining > 0 ? `약 ${_fmtSec(remaining)} 남음` : '마무리 중...';
+    }
+
+    function startEta() {
+        _etaStart = Date.now();
+        _doneSteps.clear();
+        const bar = document.getElementById('eta-bar');
+        bar.style.display = 'flex';
+        document.getElementById('eta-elapsed').textContent = '0:00 경과';
+        document.getElementById('eta-remain').textContent = `약 ${_fmtSec(STEPS_DEF.flatMap(g=>g.steps).reduce((s,x)=>s+x.secs,0))} 예상`;
+        clearInterval(_etaTimer);
+        _etaTimer = setInterval(_updateEta, 1000);
+    }
+
+    function stopEta() {
+        clearInterval(_etaTimer);
+        _etaTimer = null;
+        _etaStart = null;
+    }
 
     // ── 스텝 초기화 ──────────────────────────────────────────
     function initSteps(keywords) {
@@ -1177,10 +1226,12 @@
 
         document.getElementById('log').innerHTML = '';
         document.getElementById('progress-card').style.display = 'block';
+        document.getElementById('eta-bar').style.display = 'none';
         document.getElementById('btn-run').disabled = true;
         resetResultPanel();
         if (typeof resetPipelineBar === 'function') resetPipelineBar();
         initSteps(currentKeywords);
+        startEta();
 
         if (jobIdOverride) {
             currentJobId = jobIdOverride;
@@ -1216,6 +1267,8 @@
                 if (currentStepEl) {
                     currentStepEl.className = 'step done';
                     currentStepEl.querySelector('.step-icon').textContent = '✓';
+                    _doneSteps.add(currentStepEl.id);
+                    _updateEta();
                 }
                 setStepByName(name, 'active');
                 appendLog('\n▶ ' + name.trim(), 'log-step');
@@ -1229,6 +1282,7 @@
                     currentStepEl.className = 'step error';
                     currentStepEl.querySelector('.step-icon').textContent = '✗';
                 }
+                stopEta();
 
             } else if (msg.startsWith('PENDING:')) {
                 const reportDate = msg.slice(8);
@@ -1261,6 +1315,12 @@
                 if (currentStepEl) {
                     currentStepEl.className = 'step done';
                     currentStepEl.querySelector('.step-icon').textContent = '✓';
+                    _doneSteps.add(currentStepEl.id);
+                }
+                stopEta();
+                const elapsed = _etaStart ? Math.floor((Date.now() - _etaStart) / 1000) : null;
+                if (elapsed !== null) {
+                    document.getElementById('eta-remain').textContent = `완료 (총 ${_fmtSec(elapsed)})`;
                 }
                 es.close(); activeStream = null;
                 onDone(reportDate);
@@ -1270,6 +1330,7 @@
             } else if (msg === 'DONE') {
                 es.close(); activeStream = null;
                 inPendingState = false;
+                stopEta();
                 document.getElementById('btn-run').disabled = false;
                 setTimeout(loadHistory, 500);
             }
