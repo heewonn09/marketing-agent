@@ -631,6 +631,41 @@
             display: flex; flex-direction: column; gap: 24px;
             overflow-y: auto;
         }
+
+        /* ── 사이드바 내부 ── */
+        .sb-chart-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        .sb-donut-wrap { position: relative; width: 100px; height: 100px; }
+        .sb-donut-wrap canvas { width: 100px !important; height: 100px !important; }
+        .sb-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .sb-donut-val { font-size: 18px; font-weight: 700; color: #1a202c; }
+        .sb-donut-lbl { font-size: 10px; color: #a0aec0; }
+        .sb-legend { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .sb-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #718096; }
+        .sb-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .sb-legend-count { font-weight: 600; color: #1a202c; margin-left: 2px; }
+
+        .sb-input-wrap { display: flex; gap: 6px; }
+        .sb-input-wrap input { flex: 1; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; }
+        .sb-input-wrap input:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); }
+        .sb-btn-run { background: #667eea; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .sb-btn-run:hover { background: #5a67d8; }
+        .sb-btn-run:disabled { background: #cbd5e0; cursor: not-allowed; }
+
+        .quick-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .quick-tag { font-size: 11px; padding: 3px 8px; background: #edf2f7; border-radius: 20px; cursor: pointer; color: #4a5568; border: none; }
+        .quick-tag:hover { background: #e2e8f0; }
+
+        .sidebar #progress-card { background: #f7f8fc; border-radius: var(--card-radius); padding: 14px; display: none; }
+        .sidebar #progress-card .card-title { font-size: 12px; font-weight: 700; color: #718096; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .sidebar .step { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #edf2f7; }
+        .sidebar .step-icon { width: 16px; text-align: center; font-size: 11px; }
+        .sidebar .step.done { color: #38a169; }
+        .sidebar .step.running { color: #667eea; font-weight: 600; }
+        .sidebar .step.pending-approval { color: #ed8936; }
+        .sidebar .step.error { color: #e53e3e; }
+        .sidebar .step-group-label { font-size: 10px; color: #a0aec0; font-weight: 600; padding: 6px 0 2px; text-transform: uppercase; }
+        .sidebar .step-time { margin-left: auto; font-size: 10px; color: #cbd5e0; }
+        .sidebar #log { font-size: 11px; color: #718096; margin-top: 8px; max-height: 80px; overflow-y: auto; line-height: 1.6; }
     </style>
 </head>
 <body>
@@ -653,61 +688,42 @@
     </nav>
     <div class="app-body">
 
-    <!-- 통계 + 차트 통합 패널 -->
-    <div class="analytics-section" id="analytics-section" style="display:none">
-        <span class="analytics-title-col">실행 현황</span>
-        <div class="analytics-chart-block">
-            <div class="donut-wrap">
-                <canvas id="status-chart"></canvas>
-                <div class="donut-center">
-                    <div class="donut-center-val" id="donut-success-val">—</div>
-                    <div class="donut-center-lbl">성공률</div>
+        <aside class="sidebar">
+            <!-- 도넛 차트 -->
+            <div class="sidebar-section sb-chart-wrap" id="sb-chart-section" style="display:none">
+                <div class="sb-donut-wrap">
+                    <canvas id="status-chart" width="100" height="100"></canvas>
+                    <div class="sb-donut-center">
+                        <div class="sb-donut-val" id="donut-success-val">—</div>
+                        <div class="sb-donut-lbl">성공률</div>
+                    </div>
                 </div>
+                <div class="sb-legend" id="chart-legend"></div>
             </div>
-            <div class="analytics-legend" id="chart-legend"></div>
-        </div>
-        <div class="analytics-divider"></div>
-        <div class="stats-grid">
-            <div class="stat-item">
-                <div class="stat-label">전체 실행</div>
-                <div class="stat-value" id="stat-total">—</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">이번 주</div>
-                <div class="stat-value" id="stat-week">—</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">최다 키워드</div>
-                <div class="stat-value" id="stat-topkw" style="font-size:14px;word-break:break-all">—</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">평균 소요</div>
-                <div class="stat-value" id="stat-avg-dur">—</div>
-            </div>
-        </div>
-    </div>
 
-    <div class="layout">
-
-        <!-- 왼쪽 -->
-        <div class="left-col">
-            <div class="card">
-                <div class="card-title">키워드 입력</div>
-                <div class="input-row">
-                    <input id="keyword" type="text" placeholder="예: AI 마케팅, 디지털 마케팅" />
-                    <button class="btn-run" id="btn-run" onclick="startPipeline()">실행</button>
+            <!-- 키워드 입력 -->
+            <div class="sidebar-section">
+                <div class="sidebar-label">키워드 입력</div>
+                <div class="sb-input-wrap">
+                    <input id="keyword" type="text" placeholder="예: AI 마케팅" />
+                    <button class="sb-btn-run" id="btn-run" onclick="startPipeline()">실행</button>
                 </div>
+                <div class="quick-tags" id="quick-tags" style="margin-top:8px"></div>
             </div>
 
-            <div class="card" id="progress-card">
+            <!-- 진행 상황 -->
+            <div id="progress-card">
                 <div class="card-title">진행 상황</div>
                 <div class="steps" id="steps-container"></div>
                 <div id="log"></div>
             </div>
-        </div>
+        </aside>
 
-        <!-- 오른쪽 -->
-        <div class="right-col">
+        <main class="main-area">
+
+            <!-- KPI 카드 (Task 3에서 채움) -->
+            <div id="kpi-section"></div>
+
             <div class="results-panel" id="results-panel">
 
                 <div class="panel-header">
@@ -760,31 +776,32 @@
                 <div id="content-cards"></div>
 
             </div>
-        </div>
 
-    </div>
-
-    <!-- 히스토리 -->
-    <div class="history-section">
-        <div class="history-header">
-            <span class="history-header-title">최근 실행 히스토리</span>
-            <button class="btn-refresh" onclick="loadHistory()">↻ 새로고침</button>
-        </div>
-        <div id="history-list">
-            <div class="history-empty">불러오는 중...</div>
-        </div>
-    </div>
-
-    <!-- 예약 관리 -->
-    <details class="schedule-section" id="schedule-section">
-        <summary>예약 관리</summary>
-        <div class="schedule-inner">
-            <div class="sched-list" id="sched-list">
-                <div class="sched-empty">불러오는 중...</div>
+            <!-- 히스토리 (Task 4에서 채움) -->
+            <div id="history-list-placeholder">
+                <div class="history-section">
+                    <div class="history-header">
+                        <span class="history-header-title">최근 실행 히스토리</span>
+                        <button class="btn-refresh" onclick="loadHistory()">↻ 새로고침</button>
+                    </div>
+                    <div id="history-list">
+                        <div class="history-empty">불러오는 중...</div>
+                    </div>
+                </div>
             </div>
-            <button class="btn-run" style="font-size:12px;padding:8px 16px" onclick="openSchedForm()">+ 새 예약 추가</button>
-        </div>
-    </details>
+
+            <!-- 예약 관리 -->
+            <details class="schedule-section" id="schedule-section">
+                <summary>예약 관리</summary>
+                <div class="schedule-inner">
+                    <div class="sched-list" id="sched-list">
+                        <div class="sched-empty">불러오는 중...</div>
+                    </div>
+                    <button class="btn-run" style="font-size:12px;padding:8px 16px" onclick="openSchedForm()">+ 새 예약 추가</button>
+                </div>
+            </details>
+
+        </main>
 
     <!-- 예약 폼 모달 -->
     <div class="sched-modal-overlay" id="sched-modal" onclick="if(event.target===this)closeSchedForm()">
@@ -1514,7 +1531,7 @@
             }
 
             if (s.total > 0) {
-                document.getElementById('analytics-section').style.display = 'flex';
+                document.getElementById('sb-chart-section').style.display = 'flex';
 
                 // 도넛 중앙 성공률
                 document.getElementById('donut-success-val').textContent = (s.success_rate ?? 0) + '%';
@@ -1529,7 +1546,7 @@
                 legend.innerHTML = '';
                 labels.forEach((l, i) => {
                     if (!data[i]) return;
-                    legend.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${colors[i]}"></div>${l}<span class="legend-count">${data[i]}</span></div>`;
+                    legend.innerHTML += `<div class="sb-legend-item"><div class="sb-legend-dot" style="background:${colors[i]}"></div>${l}<span class="sb-legend-count">${data[i]}</span></div>`;
                 });
 
                 const ctx = document.getElementById('status-chart').getContext('2d');
@@ -1548,6 +1565,23 @@
                 });
             }
         }).catch(() => {});
+    }
+
+    function populateQuickTags() {
+        fetch('/history').then(r=>r.json()).then(jobs=>{
+            const kwSet = new Set();
+            jobs.forEach(j => (j.keywords||[]).forEach(k => kwSet.add(k)));
+            const container = document.getElementById('quick-tags');
+            if (!container) return;
+            container.innerHTML = '';
+            [...kwSet].slice(0,6).forEach(kw => {
+                const btn = document.createElement('button');
+                btn.className = 'quick-tag';
+                btn.textContent = kw;
+                btn.onclick = () => { document.getElementById('keyword').value = kw; };
+                container.appendChild(btn);
+            });
+        }).catch(()=>{});
     }
 
     // ── 헤더 파이프라인 바 동기화 ───────────────────────────────
@@ -1733,6 +1767,7 @@
     });
 
     loadHistory();
+    populateQuickTags();
     loadStats();
 </script>
 </body>
