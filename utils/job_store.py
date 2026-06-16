@@ -26,6 +26,21 @@ def init_db(db_path: Path) -> None:
                 duration_seconds     INTEGER
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS schedules (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                name           TEXT,
+                keywords       TEXT NOT NULL,
+                days           TEXT NOT NULL,
+                hour           INTEGER NOT NULL,
+                minute         INTEGER NOT NULL,
+                post_blog      INTEGER NOT NULL DEFAULT 1,
+                post_instagram INTEGER NOT NULL DEFAULT 1,
+                enabled        INTEGER NOT NULL DEFAULT 1,
+                created_at     TEXT NOT NULL,
+                updated_at     TEXT NOT NULL
+            )
+        """)
         # 기존 DB 마이그레이션: 새 컬럼 추가
         for col_def in [
             "ALTER TABLE jobs ADD COLUMN naver_post_url TEXT",
@@ -164,3 +179,72 @@ def mark_interrupted(db_path: Path | None = None) -> int:
             (datetime.now().isoformat(),),
         )
         return cur.rowcount
+
+
+def _row_to_schedule(row) -> dict:
+    return {
+        "id": row[0], "name": row[1], "keywords": json.loads(row[2] or "[]"),
+        "days": row[3], "hour": row[4], "minute": row[5],
+        "post_blog": bool(row[6]), "post_instagram": bool(row[7]),
+        "enabled": bool(row[8]), "created_at": row[9], "updated_at": row[10],
+    }
+
+
+_SCHED_COLS = "id,name,keywords,days,hour,minute,post_blog,post_instagram,enabled,created_at,updated_at"
+
+
+def create_schedule(name, keywords, days, hour, minute,
+                    post_blog=True, post_instagram=True, enabled=True, db_path=None) -> int:
+    path = db_path or _DEFAULT_DB
+    now = datetime.now().isoformat()
+    with sqlite3.connect(path) as conn:
+        cur = conn.execute(
+            """INSERT INTO schedules
+               (name, keywords, days, hour, minute, post_blog, post_instagram, enabled, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (name, json.dumps(keywords, ensure_ascii=False), days, int(hour), int(minute),
+             int(bool(post_blog)), int(bool(post_instagram)), int(bool(enabled)), now, now),
+        )
+        return cur.lastrowid
+
+
+def get_schedule(schedule_id, db_path=None) -> dict | None:
+    path = db_path or _DEFAULT_DB
+    with sqlite3.connect(path) as conn:
+        row = conn.execute(f"SELECT {_SCHED_COLS} FROM schedules WHERE id=?", (schedule_id,)).fetchone()
+    return _row_to_schedule(row) if row else None
+
+
+def list_schedules(db_path=None) -> list[dict]:
+    path = db_path or _DEFAULT_DB
+    with sqlite3.connect(path) as conn:
+        rows = conn.execute(f"SELECT {_SCHED_COLS} FROM schedules ORDER BY id").fetchall()
+    return [_row_to_schedule(r) for r in rows]
+
+
+def update_schedule(schedule_id, db_path=None, **fields) -> None:
+    allowed = {"name", "keywords", "days", "hour", "minute", "post_blog", "post_instagram", "enabled"}
+    sets, vals = [], []
+    for k, v in fields.items():
+        if k not in allowed:
+            continue
+        if k == "keywords":
+            v = json.dumps(v, ensure_ascii=False)
+        elif k in ("post_blog", "post_instagram", "enabled"):
+            v = int(bool(v))
+        sets.append(f"{k}=?")
+        vals.append(v)
+    if not sets:
+        return
+    sets.append("updated_at=?")
+    vals.append(datetime.now().isoformat())
+    vals.append(schedule_id)
+    path = db_path or _DEFAULT_DB
+    with sqlite3.connect(path) as conn:
+        conn.execute(f"UPDATE schedules SET {', '.join(sets)} WHERE id=?", vals)
+
+
+def delete_schedule(schedule_id, db_path=None) -> None:
+    path = db_path or _DEFAULT_DB
+    with sqlite3.connect(path) as conn:
+        conn.execute("DELETE FROM schedules WHERE id=?", (schedule_id,))
