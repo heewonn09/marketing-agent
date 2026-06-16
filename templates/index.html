@@ -569,26 +569,89 @@
         .sf-toggle input:checked + .sf-toggle-slider::before { transform: translateX(16px); }
         .sf-enabled-label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #718096; }
         .sf-btn-group { display: flex; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #edf2f7; }
+
+        /* ──────────────────────────────────────────────
+           앱 쉘 & 네비바
+        ────────────────────────────────────────────── */
+        :root {
+            --nav-h: 52px;
+            --sidebar-w: 280px;
+            --mint: #38a169;
+            --navy: #3b5bdb;
+            --card-radius: 12px;
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.07);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        body { margin: 0; background: #f7f8fc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+        /* 네비바 */
+        .global-nav {
+            position: sticky; top: 0; z-index: 100;
+            height: var(--nav-h); background: #fff;
+            border-bottom: 1px solid #e8ecf0;
+            display: flex; align-items: center;
+            padding: 0 24px; gap: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .nav-brand { font-weight: 700; font-size: 15px; color: #1a202c; letter-spacing: -0.3px; text-decoration: none; }
+        .nav-pipeline-bar { display: flex; align-items: center; gap: 4px; flex: 1; overflow: hidden; }
+        .nav-pipeline-bar .pb-step { font-size: 11px; color: #a0aec0; white-space: nowrap; padding: 2px 6px; border-radius: 4px; }
+        .nav-pipeline-bar .pb-step.active { color: #667eea; background: #ebf4ff; font-weight: 600; }
+        .nav-pipeline-bar .pb-step.done { color: #38a169; }
+        .nav-pipeline-bar .pb-arrow { color: #e2e8f0; font-size: 11px; }
+        .nav-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+        .btn-logout { font-size: 12px; color: #718096; text-decoration: none; padding: 5px 10px; border-radius: 6px; border: 1px solid #e2e8f0; }
+        .btn-logout:hover { background: #f7fafc; }
+
+        /* 앱 바디 (네비 아래) */
+        .app-body {
+            display: flex; flex: 1;
+            min-height: calc(100vh - var(--nav-h));
+        }
+
+        /* ── 사이드바 ── */
+        .sidebar {
+            width: var(--sidebar-w); flex-shrink: 0;
+            position: sticky; top: var(--nav-h);
+            height: calc(100vh - var(--nav-h));
+            overflow-y: auto;
+            background: #fff; border-right: 1px solid #e8ecf0;
+            padding: 20px 16px;
+            display: flex; flex-direction: column; gap: 16px;
+        }
+        .sidebar-section { }
+        .sidebar-label { font-size: 11px; font-weight: 600; color: #a0aec0; letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 10px; }
+
+        /* ── 메인 영역 ── */
+        .main-area {
+            flex: 1; min-width: 0;
+            padding: 24px 28px;
+            display: flex; flex-direction: column; gap: 24px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
-<div class="container">
+<div class="app-shell">
 
-    <header>
-        <div>
-            <h1>마케팅 자동화 시스템</h1>
-            <div class="pipeline-bar" id="pipeline-bar">
-                <span class="pb-step" data-step="step-collect">수집</span><span class="pb-arrow">›</span>
-                <span class="pb-step" data-step="step-analyze">분석</span><span class="pb-arrow">›</span>
-                <span class="pb-step" data-step="step-write">작성</span><span class="pb-arrow">›</span>
-                <span class="pb-step" data-step="step-cardnews">카드뉴스</span><span class="pb-arrow">›</span>
-                <span class="pb-step" data-step="step-report">리포트</span><span class="pb-arrow">›</span>
-                <span class="pb-step" data-step="step-post">포스팅</span><span class="pb-arrow">›</span>
-                <span class="pb-step" data-step="step-instagram">인스타그램</span>
-            </div>
+    <nav class="global-nav">
+        <a class="nav-brand" href="/">마케팅 자동화</a>
+        <div class="nav-pipeline-bar" id="pipeline-bar">
+            <span class="pb-step" data-step="step-collect">수집</span><span class="pb-arrow">›</span>
+            <span class="pb-step" data-step="step-analyze">분석</span><span class="pb-arrow">›</span>
+            <span class="pb-step" data-step="step-write">작성</span><span class="pb-arrow">›</span>
+            <span class="pb-step" data-step="step-cardnews">카드뉴스</span><span class="pb-arrow">›</span>
+            <span class="pb-step" data-step="step-report">리포트</span><span class="pb-arrow">›</span>
+            <span class="pb-step" data-step="step-post">포스팅</span><span class="pb-arrow">›</span>
+            <span class="pb-step" data-step="step-instagram">인스타</span>
         </div>
-        <a href="/logout" class="btn-logout">로그아웃</a>
-    </header>
+        <div class="nav-right">
+            <a href="/logout" class="btn-logout">로그아웃</a>
+        </div>
+    </nav>
+    <div class="app-body">
 
     <!-- 통계 + 차트 통합 패널 -->
     <div class="analytics-section" id="analytics-section" style="display:none">
@@ -786,7 +849,8 @@
         </div>
     </div>
 
-</div>
+    </div><!-- /.app-body -->
+</div><!-- /.app-shell -->
 
 <div id="lightbox" onclick="closeLightbox()">
     <button class="close-btn" onclick="closeLightbox()">✕</button>
