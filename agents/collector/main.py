@@ -32,8 +32,12 @@ def _fetch_page(keyword: str, start: int, client_id: str, client_secret: str) ->
     req.add_header("X-Naver-Client-Id", client_id)
     req.add_header("X-Naver-Client-Secret", client_secret)
 
-    with urllib.request.urlopen(req) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"[{keyword}] 블로그 API 오류 (start={start}): {e}", file=_sys.stderr)
+        return []
 
     results = []
     for item in data.get("items", []):
@@ -89,8 +93,12 @@ def _fetch_news_page(keyword: str, start: int, client_id: str, client_secret: st
     req.add_header("X-Naver-Client-Id", client_id)
     req.add_header("X-Naver-Client-Secret", client_secret)
 
-    with urllib.request.urlopen(req) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"[{keyword}] 뉴스 API 오류 (start={start}): {e}", file=_sys.stderr)
+        return []
 
     results = []
     for item in data.get("items", []):
@@ -147,6 +155,12 @@ def _collect_and_save(keyword: str, target: int, data_dir: Path) -> Path:
         item.setdefault("source", "blog")
 
     results = blog_results + news_results
+    if not results:
+        raise RuntimeError(
+            f"[{keyword}] 블로그/뉴스 수집 결과가 0개입니다. "
+            "NAVER_CLIENT_ID/NAVER_CLIENT_SECRET를 확인하거나 API 할당량을 확인하세요."
+        )
+
     safe_keyword = re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
     date_str = datetime.now().strftime("%Y-%m-%d")
     output_path = data_dir / f"{safe_keyword}_{date_str}.json"

@@ -236,9 +236,10 @@
         .gallery-title { font-size: 11px; font-weight: 700; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
         .gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .gallery-img {
-            width: 100%; aspect-ratio: 1; object-fit: cover;
+            width: 100%; aspect-ratio: 3/4; object-fit: contain;
             border-radius: 7px; cursor: pointer;
             border: 2px solid #e2e8f0;
+            background: #1a202c;
             transition: border-color 0.2s, transform 0.15s;
         }
         .gallery-img:hover { border-color: #667eea; transform: scale(1.02); }

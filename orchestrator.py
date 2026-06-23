@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -21,10 +22,15 @@ _completed: set[str] = set()
 _resume = False
 
 
-def run_step(step_key: str, name: str, script: str, args: list[str]) -> bool:
+def run_step(step_key: str, name: str, script: str, args: list[str],
+             expected_output: "Path | None" = None) -> bool:
     if _resume and step_key in _completed:
-        log.info("건너뜀(체크포인트 완료): %s", name)
-        return True
+        if expected_output is None or expected_output.exists():
+            log.info("건너뜀(체크포인트 완료): %s", name)
+            return True
+        log.warning("체크포인트에 완료 표시됐지만 출력 파일 없음, 재실행: %s → %s",
+                    name, expected_output)
+        _completed.discard(step_key)
 
     log.info("─" * 50)
     log.info("시작: %s", name)
@@ -69,12 +75,18 @@ def main():
     log.info("파이프라인 시작 — 키워드: %s | 날짜: %s", keywords, today)
     log.info("단계: collector → analyzer → writer → reporter → monitor → poster → instagram")
 
+    safe_kws = [re.sub(r'[<>:"/\\|?*\n\r\t]', "_", kw) for kw in keywords]
+    data_dir = ROOT / "data"
+    output_dir = ROOT / "output"
+
     # 1. 수집: 키워드 전체 한 번에 전달 (collector 내부에서 ThreadPoolExecutor 처리)
+    # expected_output: 첫 번째 키워드의 수집 파일 (대표 검증용)
     if not run_step(
         "collector",
         f"수집 (collector) — {len(keywords)}개 키워드 병렬",
         "agents/collector/main.py",
         ["--keyword"] + keywords,
+        expected_output=data_dir / f"{safe_kws[0]}_{today}.json",
     ):
         sys.exit(1)
 
@@ -84,16 +96,18 @@ def main():
         f"분석 (analyzer) — {len(keywords)}개 키워드 병렬",
         "agents/analyzer/main.py",
         ["--keyword"] + keywords,
+        expected_output=data_dir / f"analyzed_{safe_kws[0]}_{today}.json",
     ):
         sys.exit(1)
 
     # 3. 작성: 키워드별 순차 (의존성: 각 키워드의 분석 결과 필요)
-    for i, keyword in enumerate(keywords, 1):
+    for i, (keyword, safe_kw) in enumerate(zip(keywords, safe_kws), 1):
         if not run_step(
             f"writer:{keyword}",
             f"작성 (writer) [{i}/{len(keywords)}] — {keyword}",
             "agents/writer/main.py",
             ["--keyword", keyword],
+            expected_output=output_dir / f"content_{safe_kw}_{today}.json",
         ):
             sys.exit(1)
 

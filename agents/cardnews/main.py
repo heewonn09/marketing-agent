@@ -115,25 +115,37 @@ def _apply_overlay(img_bytes: bytes, slide_idx: int,
     WHITE         = (255, 255, 255, 255)
     WHITE_DIM     = (200, 200, 200, 210)
 
+    MAX_TEXT_W = W - PAD * 2  # 텍스트 최대 폭 (좌우 패딩 제외)
+
+    def _fit_text(text: str, font: ImageFont.FreeTypeFont) -> str:
+        """텍스트가 MAX_TEXT_W를 초과하면 픽셀 기준으로 잘라 '…' 추가."""
+        if draw.textbbox((0, 0), text, font=font)[2] <= MAX_TEXT_W:
+            return text
+        while text and draw.textbbox((0, 0), text + "…", font=font)[2] > MAX_TEXT_W:
+            text = text[:-1]
+        return text + "…"
+
     # ────────────────────────────────────────────────────────────────────────
     # 슬라이드 1 — 커버 (키워드 대제목 + 트렌드 요약)
     # ────────────────────────────────────────────────────────────────────────
     if slide_idx == 1:
-        # 상단: 레이블 + 키워드
+        # 상단: 레이블 + 키워드 (픽셀 폭 기준으로 잘림 방지)
         y = PAD
         y += _shadow_text(draw, PAD, y, "📊  마케팅 트렌드 분석",
                           _font(SZ_LABEL, "bold"), ACCENT_GREEN) + LINE_GAP
-        y += _shadow_text(draw, PAD, y, f"#{keyword}",
+        kw_display = _fit_text(f"#{keyword}", _font(SZ_XL, "xl"))
+        y += _shadow_text(draw, PAD, y, kw_display,
                           _font(SZ_XL, "xl"), WHITE) + LINE_GAP * 2
         # 키워드 아래: 관련 키워드 태그 (소)
         kws = [k.get("word", "") for k in data.get("keywords", [])[:3]]
         if kws:
-            _shadow_text(draw, PAD, y, "  ".join(f"#{w}" for w in kws),
+            tags_line = _fit_text("  ".join(f"#{w}" for w in kws), _font(SZ_LABEL, "regular"))
+            _shadow_text(draw, PAD, y, tags_line,
                          _font(SZ_LABEL, "regular"), WHITE_DIM)
 
-        # 하단: 트렌드 요약 (최대 2줄)
+        # 하단: 트렌드 요약 (최대 2줄, 픽셀 폭 기준 wrapping)
         summary = data.get("trend_summary", "")
-        lines = _wrap_korean(draw, summary, _font(SZ_BODY, "regular"), W - PAD * 2)[:2]
+        lines = _wrap_korean(draw, summary, _font(SZ_BODY, "regular"), MAX_TEXT_W)[:2]
         y_b = H - BANNER_H + PAD // 2
         for line in lines:
             y_b += _shadow_text(draw, PAD, y_b, line,
@@ -154,16 +166,16 @@ def _apply_overlay(img_bytes: bytes, slide_idx: int,
         y = PAD
         y += _shadow_text(draw, PAD, y, "🔥  지금 주목해야 할 트렌드",
                           _font(SZ_LABEL, "bold"), ACCENT_AMBER) + LINE_GAP
-        _shadow_text(draw, PAD, y, keyword, _font(SZ_TITLE, "bold"), WHITE)
+        _shadow_text(draw, PAD, y, _fit_text(keyword, _font(SZ_TITLE, "bold")),
+                     _font(SZ_TITLE, "bold"), WHITE)
 
-        # 하단: 트렌드 핵심 키워드 1줄씩 (상세 내용은 인스타 캡션에)
+        # 하단: 트렌드 핵심 문구 1줄씩 — 픽셀 폭 기준으로 잘림 처리
         trends = [str(t) for t in data.get("trends", [])[:3]]
         y_b = H - BANNER_H + PAD // 2
         for t in trends:
             short = t.split(".")[0].split("：")[0].split(":")[0].strip()
-            if len(short) > 24:
-                short = short[:23] + "…"
-            y_b += _shadow_text(draw, PAD, y_b, f"• {short}",
+            short = _fit_text(f"• {short}", _font(SZ_BODY, "bold"))
+            y_b += _shadow_text(draw, PAD, y_b, short,
                                 _font(SZ_BODY, "bold"), WHITE) + LINE_GAP
 
     # ────────────────────────────────────────────────────────────────────────
@@ -174,16 +186,16 @@ def _apply_overlay(img_bytes: bytes, slide_idx: int,
         y = PAD
         y += _shadow_text(draw, PAD, y, "💡  핵심 인사이트",
                           _font(SZ_LABEL, "bold"), ACCENT_BLUE) + LINE_GAP
-        _shadow_text(draw, PAD, y, keyword, _font(SZ_TITLE, "bold"), WHITE)
+        _shadow_text(draw, PAD, y, _fit_text(keyword, _font(SZ_TITLE, "bold")),
+                     _font(SZ_TITLE, "bold"), WHITE)
 
-        # 하단: 인사이트 핵심 문구 1줄씩 (상세 내용은 인스타 캡션에)
+        # 하단: 인사이트 핵심 문구 1줄씩 — 픽셀 폭 기준으로 잘림 처리
         insights = [str(ins) for ins in data.get("insights", [])[:3]]
         y_b = H - BANNER_H + PAD // 2
         for ins in insights:
             short = ins.split(".")[0].split("：")[0].split(":")[0].strip()
-            if len(short) > 24:
-                short = short[:23] + "…"
-            y_b += _shadow_text(draw, PAD, y_b, f"▶  {short}",
+            short = _fit_text(f"▶  {short}", _font(SZ_BODY, "bold"))
+            y_b += _shadow_text(draw, PAD, y_b, short,
                                 _font(SZ_BODY, "bold"), WHITE) + LINE_GAP
 
     # ────────────────────────────────────────────────────────────────────────
@@ -199,15 +211,22 @@ def _apply_overlay(img_bytes: bytes, slide_idx: int,
         _shadow_text(draw, PAD, y, "트렌드 분석 에이전트",
                      _font(SZ_TITLE - 4, "bold"), WHITE_DIM)
 
-        # 하단: 팔로우 CTA + 해시태그
+        # 하단: 팔로우 CTA + 해시태그 (최대 폭 초과 시 키워드 수 축소)
         y_b = H - BANNER_H + PAD // 2
         y_b += _shadow_text(draw, PAD, y_b, "팔로우하고 매일 트렌드를 받아보세요 →",
                             _font(SZ_BODY, "bold"), ACCENT_GREEN) + LINE_GAP
         kws = [k.get("word", "") for k in data.get("keywords", [])[:5]]
         if kws:
-            tags = "  ".join(f"#{w}" for w in kws)
-            _shadow_text(draw, PAD, y_b, tags,
-                         _font(SZ_LABEL, "regular"), WHITE_DIM)
+            tag_font = _font(SZ_LABEL, "regular")
+            # 태그가 MAX_TEXT_W를 초과하면 키워드 수를 하나씩 줄임
+            while kws:
+                tags = "  ".join(f"#{w}" for w in kws)
+                if draw.textbbox((0, 0), tags, font=tag_font)[2] <= MAX_TEXT_W:
+                    break
+                kws = kws[:-1]
+            if kws:
+                _shadow_text(draw, PAD, y_b, tags,
+                             tag_font, WHITE_DIM)
 
     # ── 합성 ────────────────────────────────────────────────────────────────
     result = Image.alpha_composite(img, overlay).convert("RGB")

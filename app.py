@@ -795,9 +795,22 @@ def scheduled_run(schedule_id: int):
         "naver_post_url": None, "instagram_media_id": None, "instagram_permalink": None,
     }
     upsert_job(job_id, "running", keywords)
-    threading.Thread(target=run_pipeline, args=(job_id, keywords),
-                     kwargs={"auto_post": True, "post_blog": sched["post_blog"],
-                             "post_instagram": sched["post_instagram"]}, daemon=True).start()
+
+    def _safe_run():
+        try:
+            run_pipeline(job_id, keywords, auto_post=True,
+                         post_blog=sched["post_blog"],
+                         post_instagram=sched["post_instagram"])
+        except Exception as e:
+            err_msg = f"스케줄 실행 중 예외 발생: {e}"
+            print(f"[scheduler] {err_msg}")
+            if jobs.get(job_id, {}).get("status") == "running":
+                jobs[job_id]["status"] = "error"
+                upsert_job(job_id, "error", error_message=err_msg)
+                jobs[job_id]["queue"].put(f"ERROR:{err_msg}")
+                jobs[job_id]["queue"].put("DONE")
+
+    threading.Thread(target=_safe_run, daemon=True).start()
 
 
 def _apply_schedule(sched: dict):

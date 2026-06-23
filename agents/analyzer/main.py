@@ -22,6 +22,18 @@ from utils.gemini_retry import gemini_retry
 from utils.logging_setup import get_logger
 from utils.config import env_int
 
+try:
+    from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+    _datalab_retry = retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=10, max=60),
+        retry=retry_if_exception_type(urllib.error.HTTPError),
+        reraise=False,
+    )
+except ImportError:
+    def _datalab_retry(func):  # type: ignore[misc]
+        return func
+
 # 네이버 데이터랩 한 번에 조회할 최대 키워드 수 (API 그룹 제한)
 DATALAB_KEYWORD_LIMIT = env_int("DATALAB_KEYWORD_LIMIT", 5)
 
@@ -68,7 +80,7 @@ ANALYSIS_PROMPT = """다음은 "{keyword}" 키워드로 수집한 네이버 블�
     {{"index": 1, "sentiment": "긍정|부정|중립", "reason": "한 줄 이유"}},
     ...
   ],
-  "trend_summary": "전반적인 트렌드를 2~3문장으로 요약",
+  "trend_summary": "전반적인 트렌드를 1~2문장으로 요약 (카드뉴스 표시용, 반드시 60자 이내)",
   "trends": [
     "트렌드 설명 (구체적인 수치나 사례 포함, 2-3문장)",
     ...
@@ -107,7 +119,7 @@ ANALYSIS_PROMPT = """다음은 "{keyword}" 키워드로 수집한 네이버 블�
 
 규칙:
 - posts_sentiment: 포스트마다 index(1부터), sentiment(긍정/부정/중립), reason
-- trend_summary: 전체 흐름을 2~3문장으로 요약
+- trend_summary: 전체 흐름을 1~2문장으로 요약, 반드시 60자 이내 (카드뉴스 2줄 한도)
 - trends: 3-5개, 데이터에서 발견되는 주요 흐름
 - insights: 3-5개, 마케터가 바로 활용 가능한 인사이트
 - keywords: 10-15개, 가장 중요한 키워드를 relevance 순으로
@@ -156,11 +168,14 @@ def fetch_search_trends(
         method="POST",
     )
 
-    try:
+    def _do_request():
         with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            return json.loads(resp.read().decode("utf-8"))
+
+    try:
+        data = _datalab_retry(_do_request)()
     except urllib.error.HTTPError as e:
-        log.warning("데이터랩 API 오류로 검색량 트렌드 누락: %s %s (키워드: %s)",
+        log.warning("데이터랩 API 오류로 검색량 트렌드 누락 (재시도 후 포기): %s %s (키워드: %s)",
                     e.code, e.reason, keywords[:5])
         return [], False
     except Exception as e:
