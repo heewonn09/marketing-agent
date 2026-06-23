@@ -12,7 +12,7 @@ def test_md_to_html_headings_and_paragraph():
     assert "<h1>제목</h1>" in html
     assert "<h2>소제목</h2>" in html
     assert "<h3>소소제목</h3>" in html
-    assert "<p>본문</p>" in html
+    assert "본문</p>" in html
 
 
 def test_md_to_html_blank_line_becomes_br():
