@@ -239,14 +239,23 @@ H3 소제목은 반드시 `✅` 또는 `📌` 이모지로 시작:
 
 @gemini_retry
 def _call_gemini(client, prompt: str) -> str:
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-        ),
-    )
-    return response.text.strip()
+    # 2.5-flash 과부하 시 lite로 자동 fallback
+    for model in ("gemini-2.5-flash", "gemini-2.5-flash-lite"):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
+            )
+            return response.text.strip()
+        except Exception as e:
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                if model != "gemini-2.5-flash-lite":
+                    continue
+            raise
+    raise RuntimeError("모든 Gemini 모델 503 실패")
 
 
 def _unsplash_thumb(query: str) -> str:

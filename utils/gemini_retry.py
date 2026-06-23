@@ -26,8 +26,8 @@ try:
         return isinstance(exc, (_req.RequestException, ConnectionError, TimeoutError))
 
     gemini_retry = retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=4, max=30),
+        stop=stop_after_attempt(8),
+        wait=wait_exponential(multiplier=2, min=10, max=120),
         retry=retry_if_exception(_is_retryable),
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
