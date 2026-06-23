@@ -119,7 +119,18 @@ def main():
     if not run_step("monitor", "모니터 (monitor)", "agents/monitor/main.py", ["--keywords"] + keywords + ["--once"]):
         sys.exit(1)
 
-    # 6. 포스팅: 실패해도 계속 진행 (VM에서는 네이버 CAPTCHA로 차단될 수 있음)
+    # 6. 카드뉴스: 실패해도 계속 진행 (인스타그램 캐러셀용 이미지 사전 생성)
+    for i, (keyword, safe_kw) in enumerate(zip(keywords, safe_kws), 1):
+        if not run_step(
+            f"cardnews:{keyword}",
+            f"카드뉴스 (cardnews) [{i}/{len(keywords)}] — {keyword}",
+            "agents/cardnews/main.py",
+            ["--keyword", keyword, "--date", today],
+            expected_output=output_dir / f"cardnews_{safe_kw}_{today}_1.png",
+        ):
+            log.warning("카드뉴스 생성 실패 — 인스타그램은 Unsplash 이미지로 진행: %s", keyword)
+
+    # 7. 포스팅: 실패해도 계속 진행 (VM에서는 네이버 CAPTCHA로 차단될 수 있음)
     for i, keyword in enumerate(keywords, 1):
         if not run_step(
             f"poster:{keyword}",
@@ -129,13 +140,21 @@ def main():
         ):
             log.warning("포스팅 실패 (네이버 봇 감지 가능성) — 로컬에서 별도 실행 필요: %s", keyword)
 
-    # 7. 인스타그램: 키워드별 순차 (의존성: writer 출력 필요)
-    for i, keyword in enumerate(keywords, 1):
+    # 8. 인스타그램: 카드뉴스 4장이 있으면 캐러셀, 없으면 단일 이미지
+    for i, (keyword, safe_kw) in enumerate(zip(keywords, safe_kws), 1):
+        cardnews_ready = all(
+            (output_dir / f"cardnews_{safe_kw}_{today}_{n}.png").exists()
+            for n in range(1, 5)
+        )
+        ig_args = ["--keyword", keyword, "--date", today]
+        if cardnews_ready:
+            ig_args.append("--carousel")
+            log.info("카드뉴스 4장 감지 → 캐러셀 업로드: %s", keyword)
         if not run_step(
             f"instagram:{keyword}",
             f"인스타그램 (instagram) [{i}/{len(keywords)}] — {keyword}",
             "agents/instagram/main.py",
-            ["--keyword", keyword, "--date", today],
+            ig_args,
         ):
             sys.exit(1)
 
