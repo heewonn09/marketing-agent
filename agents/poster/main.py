@@ -613,8 +613,9 @@ def main():
     data_dir = _ROOT / "data"
     data_dir.mkdir(exist_ok=True)
 
-    # $DISPLAY 없는 환경(Linux VM 등)에서는 headless 강제 적용
-    headless = args.headless or (not os.environ.get("DISPLAY"))
+    # Linux에서 $DISPLAY 없으면 headless 강제 (Windows는 DISPLAY가 없어도 GUI 있음)
+    import platform
+    headless = args.headless or (platform.system() != "Windows" and not os.environ.get("DISPLAY"))
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(**_launch_kwargs(headless))
