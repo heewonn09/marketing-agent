@@ -469,7 +469,7 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
             print(f"재로그인 후 현재 URL: {page.url}")
             # 보안인증·기기확인 페이지 감지
             if any(k in page.url for k in ("safeguard", "device", "challenge", "captcha", "protect")):
-                page.screenshot(path=str(ROOT / "data" / "poster_security_check.png"))
+                page.screenshot(path=str(_ROOT / "data" / "poster_security_check.png"))
                 raise RuntimeError(
                     f"네이버 보안 인증 페이지 감지 ({page.url}). "
                     "로컬에서 --manual-login으로 쿠키를 갱신 후 서버에 업로드하세요."
@@ -490,9 +490,9 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
     # 에디터 완전 로딩 대기 (재로그인 후 React 초기화 시간 확보)
     print(f"에디터 로딩 대기 중... (현재 URL: {page.url})")
     try:
-        page.wait_for_selector(".se-container", timeout=60000)
+        page.wait_for_selector(".se-container", timeout=120000)
     except Exception:
-        page.screenshot(path=str(ROOT / "data" / "poster_error.png"))
+        page.screenshot(path=str(_ROOT / "data" / "poster_error.png"))
         raise RuntimeError(
             f".se-container 로딩 실패. 현재 URL: {page.url}\n"
             "data/poster_error.png 스크린샷을 확인하세요."
