@@ -58,8 +58,6 @@ def load_encrypted_json(path):
     save_encrypted_json 으로 재저장해 마이그레이션할 수 있다.
     """
     raw = Path(path).read_bytes()
-    if not raw.strip():
-        raise ValueError(f"파일이 비어있습니다: {path}")
     try:
         data = get_fernet().decrypt(raw)
         return json.loads(data.decode("utf-8")), True

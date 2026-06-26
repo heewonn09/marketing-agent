@@ -44,10 +44,11 @@ if (_origQuery) {
 def _load_cookies(context) -> bool:
     if not _COOKIE_PATH.exists():
         return False
-    if _COOKIE_PATH.stat().st_size == 0:
-        print("쿠키 파일이 비어있습니다. 재로그인이 필요합니다.")
+    try:
+        cookies, was_encrypted = load_encrypted_json(_COOKIE_PATH)
+    except Exception as e:
+        print(f"쿠키 파일 읽기 실패 ({e}) — 재로그인합니다.")
         return False
-    cookies, was_encrypted = load_encrypted_json(_COOKIE_PATH)
     context.add_cookies(cookies)
     if not was_encrypted:
         # 평문 → 암호화 형식으로 즉시 마이그레이션
