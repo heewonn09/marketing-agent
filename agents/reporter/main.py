@@ -7,7 +7,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 from jinja2 import Environment, FileSystemLoader
+
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from utils.gemini_retry import gemini_retry
 from playwright.sync_api import sync_playwright
 
 load_dotenv()
@@ -30,6 +35,22 @@ def load_content_files(date_str: str, keyword: str | None = None) -> tuple[list[
         with open(f, encoding="utf-8") as fp:
             items.append(json.load(fp))
     return items, files
+
+
+@gemini_retry
+def _call_gemini(client, prompt: str) -> dict:
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            max_output_tokens=8192,
+            response_mime_type="application/json",
+        ),
+    )
+    raw = response.text.strip()
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw.strip())
+    return json.loads(raw)
 
 
 def analyze_with_gemini(items: list[dict]) -> dict:
@@ -71,17 +92,7 @@ def analyze_with_gemini(items: list[dict]) -> dict:
 - predicted_level은 반드시 "높음", "중간", "낮음" 중 하나를 사용해주세요.
 - 모든 텍스트는 한국어로 작성해주세요."""
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=prompt,
-    )
-
-    response_text = response.text.strip()
-    # 마크다운 코드블록 제거
-    response_text = re.sub(r"^```(?:json)?\s*", "", response_text)
-    response_text = re.sub(r"\s*```$", "", response_text.strip())
-
-    return json.loads(response_text)
+    return _call_gemini(client, prompt)
 
 
 def load_prediction_verification(keyword: str | None) -> dict:
