@@ -37,10 +37,13 @@ def load_content_files(date_str: str, keyword: str | None = None) -> tuple[list[
     return items, files
 
 
+_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]
+
+
 @gemini_retry
-def _call_gemini(client, prompt: str) -> dict:
+def _call_gemini_model(client, model: str, prompt: str) -> dict:
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
+        model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
             max_output_tokens=8192,
@@ -51,6 +54,17 @@ def _call_gemini(client, prompt: str) -> dict:
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw.strip())
     return json.loads(raw)
+
+
+def _call_gemini(client, prompt: str) -> dict:
+    last_exc = None
+    for model in _MODELS:
+        try:
+            return _call_gemini_model(client, model, prompt)
+        except Exception as e:
+            print(f"[reporter] {model} 실패 — 다음 모델로 전환: {e}")
+            last_exc = e
+    raise last_exc
 
 
 def analyze_with_gemini(items: list[dict]) -> dict:
