@@ -37,7 +37,7 @@ def load_content_files(date_str: str, keyword: str | None = None) -> tuple[list[
     return items, files
 
 
-_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]
+_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
 
 
 @gemini_retry
