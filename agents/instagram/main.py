@@ -549,13 +549,27 @@ def post_carousel(keyword: str, post_date: str) -> None:
         save_error_log(keyword, msg)
         sys.exit(1)
 
-    # Step 4: 발행
+    # Step 4: 발행 (FINISHED 후 Meta 내부 처리 완료까지 짧게 대기)
+    time.sleep(5)
     _print("[3/3] 캐러셀 발행 중...")
     pub_res = _graph_post(
         f"{API_BASE}/{account_id}/media_publish",
         {"creation_id": carousel_id, "access_token": access_token},
         label="캐러셀 발행",
     )
+    # subcode 2207026 = 미디어 아직 준비 중 → 재시도 1회
+    if not pub_res.ok:
+        err_body = pub_res.json()
+        err = err_body.get("error", {})
+        if pub_res.status_code == 400 and err.get("error_subcode") == 2207026:
+            _print(f"[WARN] 미디어 처리 미완료(2207026) — 10초 후 재발행 시도")
+            time.sleep(10)
+            pub_res = _graph_post(
+                f"{API_BASE}/{account_id}/media_publish",
+                {"creation_id": carousel_id, "access_token": access_token},
+                label="캐러셀 발행(재시도)",
+            )
+            err = pub_res.json().get("error", {}) if not pub_res.ok else {}
     if not pub_res.ok:
         err = pub_res.json().get("error", {})
         msg = (f"발행 실패 {pub_res.status_code}: {err.get('message', pub_res.text)} "

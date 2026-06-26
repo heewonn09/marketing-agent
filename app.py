@@ -423,6 +423,23 @@ def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False,
 _TERMINAL_STATUSES = {"done", "error", "rejected", "interrupted"}
 
 
+def _resolve_job_date(keywords: list[str], preferred_date: str | None) -> str:
+    """pending_approval 복원 시 올바른 날짜를 찾는다.
+
+    DB의 date가 null인 잡이라도 output/ 디렉터리에서 실제 콘텐츠 파일을 스캔해 날짜를 복구한다.
+    """
+    if preferred_date:
+        return preferred_date
+    for kw in keywords:
+        safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", kw)
+        files = sorted(ROOT.glob(f"output/content_{safe_kw}_*.json"), reverse=True)
+        if files:
+            m = _re.search(r'_(\d{4}-\d{2}-\d{2})\.json$', files[0].name)
+            if m:
+                return m.group(1)
+    return date.today().isoformat()
+
+
 def _prune_jobs(max_age: int = 3600) -> None:
     """메모리 누수 방지: 종료된 잡을 max_age(기본 1시간) 경과 후 in-memory dict에서 제거.
     상태는 jobs.db에 남아 /history·재연결 복원에는 영향 없음. 진행 중 잡은 유지."""
@@ -482,8 +499,8 @@ def stream(job_id: str):
         # 서버 재시작 후 pending_approval 잡 복원
         db_job = get_job(job_id)
         if db_job and db_job.get("status") == "pending_approval":
-            today = db_job.get("date") or date.today().isoformat()
             keywords = db_job.get("keywords", [])
+            today = _resolve_job_date(keywords, db_job.get("date"))
             q = queue.Queue()
             jobs[job_id] = {"status": "pending_approval", "queue": q,
                             "date": today, "keywords": keywords, "last_step": None}
@@ -524,15 +541,15 @@ def approve(job_id: str):
         db_job = get_job(job_id)
         if not db_job or db_job.get("status") != "pending_approval":
             return jsonify({"error": "승인 대기 상태가 아닙니다"}), 400
-        today = db_job.get("date") or date.today().isoformat()
         keywords = db_job.get("keywords", [])
+        today = _resolve_job_date(keywords, db_job.get("date"))
         if job_id not in jobs:
             jobs[job_id] = {"status": "pending_approval", "queue": queue.Queue(),
                             "date": today, "keywords": keywords, "last_step": None}
         job_info = jobs[job_id]
 
     keywords = job_info.get("keywords", [])
-    today = job_info.get("date") or date.today().isoformat()
+    today = _resolve_job_date(keywords, job_info.get("date"))
     uid = job_info.get("user_id")
     jobs[job_id]["status"] = "posting"
     upsert_job(job_id, "posting", keywords, today, user_id=uid)
