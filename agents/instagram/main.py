@@ -558,8 +558,11 @@ def post_carousel(keyword: str, post_date: str) -> None:
     )
     if not pub_res.ok:
         err = pub_res.json().get("error", {})
-        msg = f"발행 실패 {pub_res.status_code}: {err.get('message', pub_res.text)}"
+        msg = (f"발행 실패 {pub_res.status_code}: {err.get('message', pub_res.text)} "
+               f"(code={err.get('code')} subcode={err.get('error_subcode')} "
+               f"type={err.get('type')})")
         _print(f"[ERROR] {msg}")
+        _print(f"[ERROR FULL] {pub_res.text}")
         save_error_log(keyword, msg)
         sys.exit(1)
 

@@ -459,7 +459,7 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
 
     def _goto_editor():
         print(f"블로그 에디터 접속... (blogId={blog_id})")
-        page.goto(editor_url, wait_until="domcontentloaded", timeout=25000)
+        page.goto(editor_url, wait_until="domcontentloaded", timeout=60000)
         # 로그인 페이지로 리다이렉트됐으면 재로그인
         if "nidlogin" in page.url or "nid.naver.com" in page.url:
             print("쿠키 세션 만료(IP 변경 등) → ID/PW 재로그인 시도...")
@@ -476,7 +476,7 @@ def post_blog(page, title: str, body: str, naver_id: str, naver_pw: str = ""):
                 )
             print("재로그인 후 에디터 재접속...")
             time.sleep(3.0)  # 로그인 처리 완전 완료 대기
-            page.goto(editor_url, wait_until="domcontentloaded", timeout=30000)
+            page.goto(editor_url, wait_until="domcontentloaded", timeout=60000)
             print(f"에디터 접속 후 URL: {page.url}")
             time.sleep(2.0)  # 에디터 React 초기화 시간 확보
 
