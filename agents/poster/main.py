@@ -44,6 +44,9 @@ if (_origQuery) {
 def _load_cookies(context) -> bool:
     if not _COOKIE_PATH.exists():
         return False
+    if _COOKIE_PATH.stat().st_size == 0:
+        print("쿠키 파일이 비어있습니다. 재로그인이 필요합니다.")
+        return False
     cookies, was_encrypted = load_encrypted_json(_COOKIE_PATH)
     context.add_cookies(cookies)
     if not was_encrypted:
