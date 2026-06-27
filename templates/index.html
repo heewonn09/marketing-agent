@@ -1287,6 +1287,8 @@
 
             } else if (msg.startsWith('PENDING:')) {
                 const reportDate = msg.slice(8);
+                // 날짜가 바뀌었거나 아직 대기 UI가 없을 때만 재렌더링
+                const needRender = !inPendingState || (currentReportDate !== reportDate);
                 currentReportDate = reportDate;
                 if (currentStepEl) {
                     currentStepEl.className = 'step done';
@@ -1296,8 +1298,7 @@
                     const el = document.getElementById(id);
                     if (el) { el.className = 'step pending-approval'; el.querySelector('.step-icon').textContent = '⏸'; }
                 });
-                inPendingState = false;  // 날짜 업데이트 시 재렌더링 허용
-                onPending(reportDate);
+                if (needRender) { inPendingState = false; onPending(reportDate); }
                 setTimeout(loadHistory, 400);
 
             } else if (msg === 'REJECTED') {
@@ -1358,6 +1359,8 @@
         document.getElementById('approval-banner').classList.remove('hidden');
         setPanelBadge('approval');
         loadCardnews(reportDate);
+        // 히스토리에서 승인 버튼 클릭 시 배너가 화면 위에 있어 안 보일 수 있으므로 스크롤
+        setTimeout(() => document.getElementById('approval-banner').scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 
         const editEl = document.getElementById('editable-cards');
         editEl.style.display = 'block';
