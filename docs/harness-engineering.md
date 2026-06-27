@@ -230,13 +230,13 @@ cardnews_ready = json_ready and all(PNG 4장 exists)
 | 항목 | 현재 상태 | 비고 |
 |------|---------|------|
 | 로그인 세션 쿠키 | `HttpOnly + SameSite=Lax` ✅ | FORCE_HTTPS=1 시 Secure 추가 |
-| 브루트포스 방어 | 5회 실패 시 15분 잠금 ✅ | **서버 재시작 시 초기화 (BUG-5)** |
+| 브루트포스 방어 | 5회 실패 시 15분 잠금 ✅ | `data/rate_lockouts.json` 영속화 (P5-BUG5) |
 | API 키 인증 | `hmac.compare_digest` 상수 시간 비교 ✅ | |
 | 민감 환경변수 | `.env.enc` Fernet 암호화 ✅ (P3-1) | `scripts/encrypt_env.py` 실행 필요 |
 | 파일 경로 검증 | `re.sub` 특수문자 제거 ✅ | |
-| CSRF | 없음 ⚠️ | SameSite=Lax가 대부분 방어하지만 JSON API에는 취약 |
+| CSRF | `X-CSRF-Token` 헤더 검증 ✅ (P6-2) | `/login`·`X-API-Key` 면제, 세션 기반 토큰 |
 | SQL Injection | parameterized query ✅ | |
-| XSS | Jinja2 auto-escape ✅ | JS innerHTML에서 `esc()` 사용 확인 필요 |
+| XSS | Jinja2 auto-escape ✅ + `esc()` 전수 적용 ✅ (P6-3) | 스케줄 onclick `_scheduleCache` 방식으로 직렬화 제거 |
 
 ---
 
@@ -280,20 +280,26 @@ python scripts/encrypt_env.py
 
 ## 7. 다음 우선순위 로드맵
 
-### Phase 4 (즉시 ~ 1주)
-1. **BUG-1**: Instagram `fatal=False` + 다중 키워드 독립 처리
-2. **BUG-2**: `cardnews_urls JSON` 존재 확인 후 `--carousel` 전달
-3. **BUG-3/4**: cleanup 패턴에 `ig_pending_*.json`, `instagram_error_*.json` 추가
-4. **P1-3**: Naver 쿠키 사전 세션 검증
+### Phase 4 ✅ 완료
+1. **BUG-1** ✅: Instagram `fatal=False` + 다중 키워드 독립 처리
+2. **BUG-2** ✅: `cardnews_urls JSON` 존재 확인 후 `--carousel` 전달
+3. **BUG-3/4** ✅: cleanup 패턴에 `ig_pending_*.json`, `instagram_error_*.json` 추가
+4. **P1-3**: Naver 쿠키 사전 세션 검증 (미구현 — 위험도 낮음)
 
-### Phase 5 (1~2주)
-5. **BUG-5**: `LoginRateLimiter` 영속화
-6. **BUG-6**: `/rerun` user_id 복원
-7. **IMPROVE-1**: notifier/cleanup 구조화 로그
-8. **IMPROVE-2**: `_prune_jobs()` 스케줄 추가
+### Phase 5 ✅ 완료
+5. **BUG-5** ✅: `LoginRateLimiter` 영속화 (`data/rate_lockouts.json`)
+6. **BUG-6** ✅: `/rerun` user_id 복원
+7. **IMPROVE-1** ✅: notifier/cleanup 구조화 로그
+8. **IMPROVE-2** ✅: `_prune_jobs()` APScheduler 30분 잡
 
-### Phase 6 (1개월, 아키텍처)
-9. 멀티 워커 지원 — Redis 기반 `jobs` 상태 공유
-10. CSRF 토큰 도입
-11. XSS `esc()` 전수 검토
-12. 에이전트 병렬 실행 로그 UI 개선 (키워드별 탭)
+### Phase 6 ✅ 완료 (2026-06-28)
+9. 멀티 워커 지원 — Redis 기반 `jobs` 상태 공유 (**미구현**, 월 단위 대형 작업 — workers=1 유지)
+10. **CSRF 토큰** ✅: `X-CSRF-Token` 헤더 검증, `csrfFetch()` 래퍼 (index.html·admin.html)
+11. **XSS 수정** ✅: 스케줄 onclick `JSON.stringify` 제거 → `_scheduleCache[id]` 참조
+12. **로그 UI 개선** ✅: 키워드별 색상 바 (`_kwColorMap`, `appendLog()` 패턴 감지)
+
+### Phase 7 (다음 후보)
+- **멀티 워커**: Redis pub/sub으로 `jobs` dict 대체 (현재 workers=1 필수)
+- **P1-3**: Naver 쿠키 사전 세션 유효성 검증
+- **Instagram 캐러셀 UI**: 발행 전 PNG 미리보기
+- **알림 채널 확장**: 카카오톡·디스코드 Webhook
