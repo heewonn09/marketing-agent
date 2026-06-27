@@ -476,6 +476,8 @@ def run():
     if not keywords:
         return jsonify({"error": "키워드를 입력하세요"}), 400
 
+    auto_post = bool(data.get("auto_post", False))
+
     _prune_jobs()  # 종료된 옛 잡 정리 (메모리 누수 방지)
     job_id = uuid.uuid4().hex[:8]
     uid = session.get("user_id")
@@ -488,9 +490,9 @@ def run():
     upsert_job(job_id, "running", keywords, user_id=uid)
     threading.Thread(
         target=run_pipeline, args=(job_id, keywords),
-        kwargs={"user_id": uid}, daemon=True,
+        kwargs={"auto_post": auto_post, "user_id": uid}, daemon=True,
     ).start()
-    return jsonify({"job_id": job_id})
+    return jsonify({"job_id": job_id, "auto_post": auto_post})
 
 
 @app.route("/stream/<job_id>")

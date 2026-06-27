@@ -687,6 +687,9 @@
         .sb-btn-run { background: #667eea; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
         .sb-btn-run:hover { background: #5a67d8; }
         .sb-btn-run:disabled { background: #cbd5e0; cursor: not-allowed; }
+        .sb-btn-auto { background: #38a169; color: #fff; border: none; border-radius: 8px; padding: 8px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .sb-btn-auto:hover { background: #2f855a; }
+        .sb-btn-auto:disabled { background: #cbd5e0; cursor: not-allowed; }
 
         .quick-tags { display: flex; flex-wrap: wrap; gap: 6px; }
         .quick-tag { font-size: 11px; padding: 3px 8px; background: #edf2f7; border-radius: 20px; cursor: pointer; color: #4a5568; border: none; }
@@ -835,6 +838,7 @@
                 <div class="sb-input-wrap">
                     <input id="keyword" type="text" placeholder="예: AI 마케팅" />
                     <button class="sb-btn-run" id="btn-run" onclick="startPipeline()">실행</button>
+                    <button class="sb-btn-auto" id="btn-auto" onclick="startPipeline(null, null, true)" title="승인 없이 바로 포스팅까지 자동 실행">자동</button>
                 </div>
                 <div class="quick-tags" id="quick-tags" style="margin-top:8px"></div>
             </div>
@@ -1217,7 +1221,7 @@
     }
 
     // ── 파이프라인 시작 ───────────────────────────────────────
-    function startPipeline(keywordStr, jobIdOverride) {
+    function startPipeline(keywordStr, jobIdOverride, autoPost) {
         const input = keywordStr || document.getElementById('keyword').value.trim();
         if (!input) { alert('키워드를 입력하세요.'); return; }
 
@@ -1229,6 +1233,7 @@
         document.getElementById('progress-card').style.display = 'block';
         document.getElementById('eta-bar').style.display = 'none';
         document.getElementById('btn-run').disabled = true;
+        if (document.getElementById('btn-auto')) document.getElementById('btn-auto').disabled = true;
         resetResultPanel();
         if (typeof resetPipelineBar === 'function') resetPipelineBar();
         initSteps(currentKeywords);
@@ -1243,11 +1248,16 @@
         fetch('/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ keyword: input }),
+            body: JSON.stringify({ keyword: input, auto_post: !!autoPost }),
         })
         .then(r => r.json())
         .then(({ job_id, error }) => {
-            if (error) { alert(error); document.getElementById('btn-run').disabled = false; return; }
+            if (error) {
+                alert(error);
+                document.getElementById('btn-run').disabled = false; if (document.getElementById('btn-auto')) document.getElementById('btn-auto').disabled = false;
+                if (document.getElementById('btn-auto')) document.getElementById('btn-auto').disabled = false;
+                return;
+            }
             currentJobId = job_id;
             listenStream(job_id);
         });
@@ -1308,7 +1318,7 @@
                 document.getElementById('editable-cards').style.display = 'none';
                 document.getElementById('rejected-banner').classList.remove('hidden');
                 setPanelBadge('');
-                document.getElementById('btn-run').disabled = false;
+                document.getElementById('btn-run').disabled = false; if (document.getElementById('btn-auto')) document.getElementById('btn-auto').disabled = false;
                 setTimeout(loadHistory, 400);
 
             } else if (msg.startsWith('DONE:')) {
@@ -1327,14 +1337,14 @@
                 }
                 es.close(); activeStream = null;
                 onDone(reportDate);
-                document.getElementById('btn-run').disabled = false;
+                document.getElementById('btn-run').disabled = false; if (document.getElementById('btn-auto')) document.getElementById('btn-auto').disabled = false;
                 setTimeout(loadHistory, 500);
 
             } else if (msg === 'DONE') {
                 es.close(); activeStream = null;
                 inPendingState = false;
                 stopEta();
-                document.getElementById('btn-run').disabled = false;
+                document.getElementById('btn-run').disabled = false; if (document.getElementById('btn-auto')) document.getElementById('btn-auto').disabled = false;
                 setTimeout(loadHistory, 500);
             }
         };
@@ -1344,7 +1354,7 @@
             // 승인 대기 중에는 실행 버튼을 다시 활성화하지 않음
             if (!inPendingState) {
                 appendLog('[연결 오류] 스트림이 끊어졌습니다.', 'log-err');
-                document.getElementById('btn-run').disabled = false;
+                document.getElementById('btn-run').disabled = false; if (document.getElementById('btn-auto')) document.getElementById('btn-auto').disabled = false;
             }
         };
     }
