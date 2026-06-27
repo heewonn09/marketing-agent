@@ -1726,6 +1726,8 @@
             actionHtml += `<button class="btn-hist-view" onclick="showResult('${dateStr}',${JSON.stringify(job.keywords||[])})">결과 보기</button>`;
         if (job.status === 'pending_approval')
             actionHtml += `<button class="btn-hist-approve" onclick="showApproval('${job.job_id}',${JSON.stringify(job.keywords||[])},'${dateStr}')">✓ 승인</button>`;
+        if (['error','interrupted'].includes(job.status))
+            actionHtml += `<button class="btn-hist-warn" style="font-size:11px;padding:3px 8px" onclick="showJobLogs('${job.job_id}')" title="로그 보기">🔍 로그</button>`;
         if (job.keywords?.length && !['running','posting'].includes(job.status)) {
             if (tripleError) {
                 actionHtml += `<button class="btn-hist-warn" onclick="document.getElementById('schedule-section').open=true;document.getElementById('schedule-section').scrollIntoView({behavior:'smooth'})">설정 점검하기</button>`;
@@ -1792,6 +1794,21 @@
         if (reportDate) onPending(reportDate);
         // SSE 재연결 → 올바른 날짜(PENDING 이벤트) 수신 및 Part2 이벤트 수신
         listenStream(jobId);
+    }
+
+    function showJobLogs(jobId) {
+        fetch(`/logs/${jobId}`).then(r=>r.json()).then(data=>{
+            let msg = `[잡 ${jobId}] 상태: ${data.status}\n키워드: ${(data.keywords||[]).join(', ')}\n`;
+            if (data.error_message) msg += `\n에러 메시지:\n${data.error_message}\n`;
+            if (data.instagram_errors?.length) {
+                msg += `\nInstagram 에러 로그 (${data.instagram_errors.length}건):\n`;
+                data.instagram_errors.forEach(e=>{
+                    msg += `  [${e.time||''}] ${e.keyword||''}: ${e.error||e.message||JSON.stringify(e)}\n`;
+                });
+            }
+            if (!data.error_message && !data.instagram_errors?.length) msg += '\n(저장된 에러 로그 없음)';
+            alert(msg);
+        }).catch(()=>alert('로그를 불러오지 못했습니다.'));
     }
 
     function rerunJob(jobId) {

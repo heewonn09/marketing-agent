@@ -70,6 +70,14 @@ def _refresh_token(access_token: str) -> str:
         new_token = data.get("access_token", access_token)
         days = data.get("expires_in", 0) // 86400
         _print(f"[token] 갱신 완료 — 만료까지 {days}일")
+        if days < 7:
+            _print(f"[token] ⚠️ 토큰 만료 {days}일 전 — 즉시 갱신 필요!")
+            try:
+                from utils.alert_sender import send_alert
+                send_alert("Instagram 토큰 만료 임박",
+                           f"액세스 토큰 만료까지 {days}일 남았습니다. Meta Developer Console에서 갱신하세요.")
+            except Exception:
+                pass
         if new_token != access_token:
             _save_env_token(new_token)
         return new_token
@@ -278,7 +286,13 @@ def _graph_post(url: str, data: dict, *, label: str = "", timeout: int = 30):
         retry_after = res.headers.get("Retry-After", "")
         wait = int(retry_after) if str(retry_after).isdigit() else backoff
         wait = min(wait, 300)
-        _print(f"      [rate-limit] {label} {res.status_code} — {wait}s 후 재시도 ({attempt}/{IG_RETRY_MAX})")
+        try:
+            _rl_body = res.json()
+            _rl_err = _rl_body.get("error", {})
+            _print(f"      [rate-limit] {label} {res.status_code} body: code={_rl_err.get('code')} subcode={_rl_err.get('error_subcode')} msg={_rl_err.get('message','')!r} type={_rl_err.get('type')}")
+        except Exception:
+            _print(f"      [rate-limit] {label} {res.status_code} body: {res.text[:200]}")
+        _print(f"      [rate-limit] {wait}s 후 재시도 ({attempt}/{IG_RETRY_MAX})")
         time.sleep(wait)
         backoff = min(backoff * 2, 300)
     return res
@@ -421,6 +435,7 @@ def post_carousel(keyword: str, post_date: str) -> None:
     access_token = ensure_fresh_token(access_token)
 
     safe_kw = _safe_keyword(keyword)
+    _cache_path = ROOT / "data" / f"ig_pending_{safe_kw}_{post_date}.json"
 
     # imgbb 업로드된 HTTPS URL이 있으면 우선 사용 (Instagram이 HTTPS 필요)
     urls_file = ROOT / "output" / f"cardnews_urls_{safe_kw}_{post_date}.json"
@@ -471,83 +486,112 @@ def post_carousel(keyword: str, post_date: str) -> None:
             sys.exit(1)
     _print("      모든 이미지 접근 가능 확인됨")
 
-    # Step 1: 각 이미지 item container 생성 (Meta 페치 실패 시 재시도)
-    item_ids: list[str] = []
-    for idx, url in enumerate(image_urls, start=1):
-        _print(f"\n[1/4-{idx}] item container 생성 중...")
-        item_id = None
-        last_msg = ""
-        for retry in range(3):
-            res = _graph_post(
-                f"{API_BASE}/{account_id}/media",
-                {"image_url": url, "is_carousel_item": "true",
-                 "access_token": access_token},
-                label=f"item {idx}",
-            )
-            if res.ok:
-                item_id = res.json().get("id")
-                break
-            err = res.json().get("error", {})
-            last_msg = f"item {idx} 생성 실패 {res.status_code}: {err.get('message', res.text)}"
-            # "Only photo or video..." = Meta가 이미지 페치 실패 → 잠시 후 재시도
-            _print(f"      {last_msg} — 재시도 {retry + 1}/3")
-            time.sleep(5)
-        if item_id is None:
-            _print(f"[ERROR] {last_msg}")
-            save_error_log(keyword, last_msg)
-            sys.exit(1)
-        item_ids.append(item_id)
-        _print(f"      item_id: {item_id}")
+    # 캐시된 carousel_id가 있으면 컨테이너 생성 스킵 → 발행만 재시도 (rate limit 절약)
+    # Meta carousel 컨테이너는 약 10시간 후 만료 → 8시간 이상 된 캐시는 삭제
+    _CACHE_MAX_AGE = 8 * 3600
+    carousel_id: str | None = None
+    if _cache_path.exists():
+        try:
+            with open(_cache_path, encoding="utf-8") as _f:
+                _cached = json.load(_f)
+            _created_at = _cached.get("created_at")
+            _age = time.time() - float(_created_at) if _created_at else _CACHE_MAX_AGE + 1
+            if _age > _CACHE_MAX_AGE:
+                _print(f"[carousel] 캐시 만료 ({int(_age/3600)}시간 경과) — 캐시 삭제 후 새 컨테이너 생성")
+                _cache_path.unlink(missing_ok=True)
+            else:
+                carousel_id = _cached.get("carousel_id")
+                if carousel_id:
+                    _print(f"[carousel] 캐시된 carousel_id 재사용: {carousel_id} ({int(_age/60)}분 경과, 컨테이너 생성 스킵)")
+        except Exception:
+            carousel_id = None
 
-    # Step 2: 캐러셀 컨테이너 생성 (캡션 포함)
-    content = load_content(keyword, post_date)
-    caption = build_caption(content.get("instagram", {}))
-
-    _print("\n[2/3] 캐러셀 컨테이너 생성 중...")
-    res = _graph_post(
-        f"{API_BASE}/{account_id}/media",
-        {
-            "media_type": "CAROUSEL",
-            "children": ",".join(item_ids),
-            "caption": caption,
-            "access_token": access_token,
-        },
-        label="캐러셀 생성",
-    )
-    if not res.ok:
-        err = res.json().get("error", {})
-        msg = f"캐러셀 생성 실패 {res.status_code}: {err.get('message', res.text)}"
-        _print(f"[ERROR] {msg}")
-        save_error_log(keyword, msg)
-        sys.exit(1)
-    carousel_id = res.json().get("id")
-    _print(f"      carousel_id: {carousel_id}")
-
-    # Step 3: FINISHED 상태 대기 (지수 백오프)
-    _print("[carousel] 처리 대기 중...")
-    for attempt in range(POLL_ATTEMPTS):
-        wait = min(3 + attempt * 2, 15)  # 3s → 5s → … 최대 15s
-        time.sleep(wait)
-        status_res = requests.get(
-            f"{API_BASE}/{carousel_id}",
-            params={"fields": "status_code", "access_token": access_token},
-            timeout=15,
-        )
-        if status_res.ok:
-            status_code = status_res.json().get("status_code", "")
-            _print(f"      상태: {status_code} ({attempt + 1}/{POLL_ATTEMPTS}, {wait}s 대기)")
-            if status_code == "FINISHED":
-                break
-            if status_code == "ERROR":
-                msg = "캐러셀 처리 오류 (status_code=ERROR)"
-                _print(f"[ERROR] {msg}")
-                save_error_log(keyword, msg)
+    if carousel_id is None:
+        # Step 1: 각 이미지 item container 생성 (Meta 페치 실패 시 재시도)
+        item_ids: list[str] = []
+        for idx, url in enumerate(image_urls, start=1):
+            _print(f"\n[1/4-{idx}] item container 생성 중...")
+            item_id = None
+            last_msg = ""
+            for retry in range(3):
+                res = _graph_post(
+                    f"{API_BASE}/{account_id}/media",
+                    {"image_url": url, "is_carousel_item": "true",
+                     "access_token": access_token},
+                    label=f"item {idx}",
+                )
+                if res.ok:
+                    item_id = res.json().get("id")
+                    break
+                err = res.json().get("error", {})
+                last_msg = f"item {idx} 생성 실패 {res.status_code}: {err.get('message', res.text)}"
+                _print(f"      {last_msg} — 재시도 {retry + 1}/3")
+                time.sleep(5)
+            if item_id is None:
+                _print(f"[ERROR] {last_msg}")
+                save_error_log(keyword, last_msg)
                 sys.exit(1)
-    else:
-        msg = "캐러셀 처리 타임아웃"
-        _print(f"[ERROR] {msg}")
-        save_error_log(keyword, msg)
-        sys.exit(1)
+            item_ids.append(item_id)
+            _print(f"      item_id: {item_id}")
+
+        # Step 2: 캐러셀 컨테이너 생성 (캡션 포함)
+        content = load_content(keyword, post_date)
+        caption = build_caption(content.get("instagram", {}))
+
+        _print("\n[2/3] 캐러셀 컨테이너 생성 중...")
+        res = _graph_post(
+            f"{API_BASE}/{account_id}/media",
+            {
+                "media_type": "CAROUSEL",
+                "children": ",".join(item_ids),
+                "caption": caption,
+                "access_token": access_token,
+            },
+            label="캐러셀 생성",
+        )
+        if not res.ok:
+            err = res.json().get("error", {})
+            msg = f"캐러셀 생성 실패 {res.status_code}: {err.get('message', res.text)}"
+            _print(f"[ERROR] {msg}")
+            save_error_log(keyword, msg)
+            sys.exit(1)
+        carousel_id = res.json().get("id")
+        _print(f"      carousel_id: {carousel_id}")
+
+        # carousel_id 캐시 저장 (발행 실패 시 재시도에서 컨테이너 재생성 방지)
+        try:
+            with open(_cache_path, "w", encoding="utf-8") as _f:
+                json.dump({"carousel_id": carousel_id, "keyword": keyword,
+                           "date": post_date, "created_at": time.time()}, _f)
+        except Exception:
+            pass
+
+        # Step 3: FINISHED 상태 대기 (지수 백오프)
+        _print("[carousel] 처리 대기 중...")
+        for attempt in range(POLL_ATTEMPTS):
+            wait = min(3 + attempt * 2, 15)  # 3s → 5s → … 최대 15s
+            time.sleep(wait)
+            status_res = requests.get(
+                f"{API_BASE}/{carousel_id}",
+                params={"fields": "status_code", "access_token": access_token},
+                timeout=15,
+            )
+            if status_res.ok:
+                status_code = status_res.json().get("status_code", "")
+                _print(f"      상태: {status_code} ({attempt + 1}/{POLL_ATTEMPTS}, {wait}s 대기)")
+                if status_code == "FINISHED":
+                    break
+                if status_code == "ERROR":
+                    msg = "캐러셀 처리 오류 (status_code=ERROR)"
+                    _print(f"[ERROR] {msg}")
+                    save_error_log(keyword, msg)
+                    _cache_path.unlink(missing_ok=True)
+                    sys.exit(1)
+        else:
+            msg = "캐러셀 처리 타임아웃"
+            _print(f"[ERROR] {msg}")
+            save_error_log(keyword, msg)
+            sys.exit(1)
 
     # Step 4: 발행 (FINISHED 후 Meta 내부 처리 완료까지 짧게 대기)
     time.sleep(5)
@@ -579,6 +623,9 @@ def post_carousel(keyword: str, post_date: str) -> None:
         _print(f"[ERROR FULL] {pub_res.text}")
         save_error_log(keyword, msg)
         sys.exit(1)
+
+    # 발행 성공 — 캐시 파일 삭제
+    _cache_path.unlink(missing_ok=True)
 
     media_id = pub_res.json().get("id")
     _print(f"\n[OK] Instagram 캐러셀 업로드 완료 — media_id: {media_id}")

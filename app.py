@@ -386,6 +386,14 @@ def run_pipeline(job_id: str, keywords: list[str], auto_post: bool = False,
                              args=(keywords, "전체 키워드", "모든 키워드 처리 실패"),
                              daemon=True).start()
             return
+        # 일부 키워드 실패 시 사용자에게 명시적으로 알림
+        failed_kws = [kw for kw in keywords if kw not in ok_keywords]
+        if failed_kws:
+            fail_msg = f"일부 키워드 처리 실패: {', '.join(failed_kws)}"
+            jobs[job_id]["queue"].put(f"LOG:⚠️ {fail_msg} — 나머지 키워드로 계속 진행")
+            threading.Thread(target=notify_error,
+                             args=(failed_kws, "키워드 처리", fail_msg),
+                             daemon=True).start()
         keywords = ok_keywords  # 이후 단계(리포트/모니터/카드뉴스/발행)는 성공한 키워드로만
 
     for name, script, step_args in [
@@ -427,16 +435,21 @@ def _resolve_job_date(keywords: list[str], preferred_date: str | None) -> str:
     """pending_approval 복원 시 올바른 날짜를 찾는다.
 
     DB의 date가 null인 잡이라도 output/ 디렉터리에서 실제 콘텐츠 파일을 스캔해 날짜를 복구한다.
+    복수 키워드는 모두 스캔 후 가장 많이 등장하는 날짜를 반환한다.
     """
     if preferred_date:
         return preferred_date
+    date_counts: dict[str, int] = {}
     for kw in keywords:
         safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", kw)
         files = sorted(ROOT.glob(f"output/content_{safe_kw}_*.json"), reverse=True)
         if files:
             m = _re.search(r'_(\d{4}-\d{2}-\d{2})\.json$', files[0].name)
             if m:
-                return m.group(1)
+                d = m.group(1)
+                date_counts[d] = date_counts.get(d, 0) + 1
+    if date_counts:
+        return max(date_counts, key=lambda k: date_counts[k])
     return date.today().isoformat()
 
 
@@ -498,7 +511,7 @@ def run():
 @app.route("/stream/<job_id>")
 def stream(job_id: str):
     if job_id not in jobs:
-        # 서버 재시작 후 pending_approval 잡 복원
+        # 서버 재시작 후 잡 복원
         db_job = get_job(job_id)
         if db_job and db_job.get("status") == "pending_approval":
             keywords = db_job.get("keywords", [])
@@ -506,6 +519,13 @@ def stream(job_id: str):
             q = queue.Queue()
             jobs[job_id] = {"status": "pending_approval", "queue": q,
                             "date": today, "keywords": keywords, "last_step": None}
+        elif db_job and db_job.get("status") == "interrupted":
+            # 서버 재시작으로 중단된 잡 — 클라이언트에 재실행 안내
+            def _interrupted_gen():
+                yield "data: ERROR:서버가 재시작되어 작업이 중단되었습니다. 재실행 버튼을 눌러 다시 시작하세요.\n\n"
+                yield "data: DONE\n\n"
+            return Response(_interrupted_gen(), mimetype="text/event-stream",
+                            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
         else:
             return "Job not found", 404
 
@@ -628,6 +648,38 @@ def history():
 @app.route("/stats")
 def stats():
     return jsonify(get_stats())
+
+
+@app.route("/logs/<job_id>")
+def job_logs(job_id: str):
+    """잡 에러 로그 조회 — DB 정보 + instagram_error_{date}.json 내용 반환."""
+    db_job = get_job(job_id)
+    if not db_job:
+        return jsonify({"error": "잡을 찾을 수 없습니다"}), 404
+    result: dict = {
+        "job_id": job_id,
+        "status": db_job.get("status"),
+        "error_message": db_job.get("error_message"),
+        "keywords": db_job.get("keywords"),
+        "date": db_job.get("date"),
+        "instagram_errors": [],
+    }
+    # instagram error log — 잡 날짜 기준으로 찾기
+    job_date = db_job.get("date") or date.today().isoformat()
+    ig_log = ROOT / "data" / f"instagram_error_{job_date}.json"
+    if ig_log.exists():
+        try:
+            with open(ig_log, encoding="utf-8") as _f:
+                _logs = _json.load(_f)
+            # 잡 키워드가 포함된 항목만 필터링
+            kws = set(k.lower() for k in (db_job.get("keywords") or []))
+            result["instagram_errors"] = [
+                e for e in _logs
+                if not kws or any(k in (e.get("keyword", "")).lower() for k in kws)
+            ] or _logs
+        except Exception:
+            pass
+    return jsonify(result)
 
 
 @app.route("/rerun/<job_id>", methods=["POST"])
@@ -828,6 +880,11 @@ def scheduled_run(schedule_id: int):
                 upsert_job(job_id, "error", error_message=err_msg)
                 jobs[job_id]["queue"].put(f"ERROR:{err_msg}")
                 jobs[job_id]["queue"].put("DONE")
+            threading.Thread(
+                target=notify_error,
+                args=(keywords, f"스케줄 #{schedule_id}", err_msg),
+                daemon=True,
+            ).start()
 
     threading.Thread(target=_safe_run, daemon=True).start()
 
