@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from utils.logging_setup import get_logger
+
+_log = get_logger("cleanup", log_file=Path(__file__).parent.parent / "logs" / "app.log")
+
 KEEP = frozenset({
     "history.json",
     "monitor_state.json",

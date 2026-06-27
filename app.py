@@ -88,7 +88,10 @@ API_KEY = os.environ.get("API_KEY", "").strip()
 _AUTH_EXEMPT_PREFIXES = ("/stream/", "/cardnews/", "/share/")
 _AUTH_EXEMPT_PATHS = ("/login",)
 
-_rate_limiter = LoginRateLimiter(max_attempts=5, window=300, lockout=900)
+_rate_limiter = LoginRateLimiter(
+    max_attempts=5, window=300, lockout=900,
+    persist_path=ROOT / "data" / "rate_lockouts.json",
+)
 
 jobs: dict[str, dict] = {}
 
@@ -713,15 +716,18 @@ def rerun(job_id: str):
     keywords = job.get("keywords") or []
     if not keywords:
         return jsonify({"error": "키워드 정보가 없습니다"}), 400
+    # 원래 잡의 user_id 복원, 없으면 현재 세션 사용자 (BUG-6)
+    uid = job.get("user_id") or session.get("user_id")
     new_id = uuid.uuid4().hex[:8]
     jobs[new_id] = {
         "status": "running", "queue": queue.Queue(), "date": None,
         "keywords": keywords, "last_step": None,
-        "started_at": time.time(),
+        "started_at": time.time(), "user_id": uid,
         "naver_post_url": None, "instagram_media_id": None, "instagram_permalink": None,
     }
-    upsert_job(new_id, "running", keywords)
-    threading.Thread(target=run_pipeline, args=(new_id, keywords), daemon=True).start()
+    upsert_job(new_id, "running", keywords, user_id=uid)
+    threading.Thread(target=run_pipeline, args=(new_id, keywords),
+                     kwargs={"user_id": uid}, daemon=True).start()
     return jsonify({"job_id": new_id, "keywords": keywords})
 
 
@@ -1000,6 +1006,12 @@ scheduler.add_job(
     CronTrigger(day_of_week="sun", hour=3, minute=0, timezone="Asia/Seoul"),
     id="ig_token_refresh",
     replace_existing=True,
+)
+# 완료된 in-memory 잡 정리 (IMPROVE-2: 매 30분)
+scheduler.add_job(
+    lambda: _prune_jobs(max_age=3600),
+    "interval", minutes=30,
+    id="prune_jobs", replace_existing=True,
 )
 # 기존 매일 09:00 scheduled_run 잡은 제거 (웹 스케줄로 대체)
 

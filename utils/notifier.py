@@ -10,6 +10,11 @@ import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
+
+from utils.logging_setup import get_logger
+
+_log = get_logger("notifier", log_file=Path(__file__).parent.parent / "logs" / "app.log")
 
 try:
     import requests as _requests
@@ -35,7 +40,7 @@ def _send_email(subject: str, body_html: str) -> bool:
             srv.sendmail(smtp_user, to_addr, msg.as_string())
         return True
     except Exception as e:
-        print(f"[notifier] 이메일 전송 실패: {e}")
+        _log.warning("이메일 전송 실패: %s", e)
         return False
 
 
@@ -47,7 +52,7 @@ def _send_slack(text: str) -> bool:
         res = _requests.post(webhook, json={"text": text}, timeout=10)
         return res.status_code == 200
     except Exception as e:
-        print(f"[notifier] 슬랙 전송 실패: {e}")
+        _log.warning("슬랙 전송 실패: %s", e)
         return False
 
 
@@ -96,7 +101,7 @@ def notify_done(keywords: list, report_date: str, base_url: str = "") -> None:
 
     email_ok = _send_email(subject, body)
     slack_ok  = _send_slack(slack_text)
-    print(f"[notifier] 완료 알림 — 이메일: {'✓' if email_ok else '✗'}, 슬랙: {'✓' if slack_ok else '✗ (미설정)'}")
+    _log.info("완료 알림 — 이메일: %s, 슬랙: %s", "✓" if email_ok else "✗", "✓" if slack_ok else "✗")
 
 
 def notify_approval_pending(keywords: list, report_date: str, base_url: str = "") -> None:
@@ -143,7 +148,7 @@ def notify_approval_pending(keywords: list, report_date: str, base_url: str = ""
 
     email_ok = _send_email(subject, body)
     slack_ok  = _send_slack(slack_text)
-    print(f"[notifier] 승인 대기 알림 — 이메일: {'✓' if email_ok else '✗'}, 슬랙: {'✓' if slack_ok else '✗ (미설정)'}")
+    _log.info("승인 대기 알림 — 이메일: %s, 슬랙: %s", "✓" if email_ok else "✗", "✓" if slack_ok else "✗")
 
 
 def notify_error(keywords: list, step: str, detail: str = "") -> None:
@@ -188,4 +193,4 @@ def notify_error(keywords: list, step: str, detail: str = "") -> None:
 
     email_ok = _send_email(subject, body)
     slack_ok  = _send_slack(slack_text)
-    print(f"[notifier] 오류 알림 — 이메일: {'✓' if email_ok else '✗'}, 슬랙: {'✓' if slack_ok else '✗ (미설정)'}")
+    _log.info("오류 알림 — 이메일: %s, 슬랙: %s", "✓" if email_ok else "✗", "✓" if slack_ok else "✗")
