@@ -288,9 +288,11 @@ def test_admin_create_and_delete_user(monkeypatch):
     _a.app.config["TESTING"] = True
     with _a.app.test_client() as c:
         c.post("/login", data={"username": "admin", "password": "adminpw"})
+        csrf = _json2.loads(c.get("/csrf-token").data)["token"]
         r = c.post("/admin/users",
-                   json={"username": "newuser_t5", "password": "newpw", "plan": "starter"})
+                   json={"username": "newuser_t5", "password": "newpw", "plan": "starter"},
+                   headers={"X-CSRF-Token": csrf})
         assert r.status_code == 201
         uid = _json2.loads(r.data)["id"]
-        r = c.delete(f"/admin/users/{uid}")
+        r = c.delete(f"/admin/users/{uid}", headers={"X-CSRF-Token": csrf})
         assert r.status_code == 200

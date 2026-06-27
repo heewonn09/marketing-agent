@@ -1065,6 +1065,21 @@
 <div id="toast"></div>
 
 <script>
+    // ── CSRF / 공통 fetch 래퍼 ─────────────────────────────────
+    let _csrfToken = '';
+    function csrfFetch(url, options = {}) {
+        const method = (options.method || 'GET').toUpperCase();
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            options.headers = Object.assign({ 'X-CSRF-Token': _csrfToken }, options.headers || {});
+        }
+        return fetch(url, options);
+    }
+
+    // ── 키워드 로그 색상 ────────────────────────────────────────
+    const _kwColors = ['#4299e1','#48bb78','#ed8936','#9f7aea','#f56565','#0bc5ea'];
+    let _kwColorMap = {};
+    const _scheduleCache = {};
+
     // ── 스텝 정의 ──────────────────────────────────────────────
     const STEPS_DEF = [
         { group: 'Part 1 — 콘텐츠 생성', steps: [
@@ -1180,7 +1195,14 @@
     function appendLog(text, cls) {
         const log = document.getElementById('log');
         const span = document.createElement('span');
-        if (cls) span.className = cls;
+        if (cls) {
+            span.className = cls;
+        } else {
+            const m = text.match(/\[([^\]]+)\]/);
+            if (m && _kwColorMap[m[1]]) {
+                span.style.cssText = `border-left:2px solid ${_kwColorMap[m[1]]};padding-left:5px`;
+            }
+        }
         span.textContent = text + '\n';
         log.appendChild(span);
         log.scrollTop = log.scrollHeight;
@@ -1228,6 +1250,8 @@
         currentKeywords   = input.split(',').map(k => k.trim()).filter(Boolean);
         currentReportDate = null;
         inPendingState    = false;
+        _kwColorMap = {};
+        currentKeywords.forEach((kw, i) => { _kwColorMap[kw] = _kwColors[i % _kwColors.length]; });
 
         document.getElementById('log').innerHTML = '';
         document.getElementById('progress-card').style.display = 'block';
@@ -1245,7 +1269,7 @@
             return;
         }
 
-        fetch('/run', {
+        csrfFetch('/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keyword: input, auto_post: !!autoPost }),
@@ -1408,7 +1432,7 @@
 
         let resp;
         try {
-            resp = await fetch(`/approve/${currentJobId}`, { method: 'POST' });
+            resp = await csrfFetch(`/approve/${currentJobId}`, { method: 'POST' });
         } catch (e) {
             btn.disabled = false;
             btn.textContent = '✓ 승인 후 게시';
@@ -1448,7 +1472,7 @@
             .map(t => t.startsWith('#') ? t : (t ? '#' + t : ''))
             .filter(Boolean);
         try {
-            await fetch(`/edit-content/${date}/${encodeURIComponent(kw)}`, {
+            await csrfFetch(`/edit-content/${date}/${encodeURIComponent(kw)}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1463,7 +1487,7 @@
     // ── 거절 ─────────────────────────────────────────────────
     function rejectJob() {
         if (!confirm('게시를 거절할까요? 생성된 콘텐츠는 삭제되지 않습니다.')) return;
-        fetch(`/reject/${currentJobId}`, { method: 'POST' });
+        csrfFetch(`/reject/${currentJobId}`, { method: 'POST' });
     }
 
     // ── 완료 ─────────────────────────────────────────────────
@@ -1813,7 +1837,7 @@
 
     function rerunJob(jobId) {
         if (!confirm('같은 키워드로 파이프라인을 다시 실행할까요?')) return;
-        fetch(`/rerun/${jobId}`,{method:'POST'})
+        csrfFetch(`/rerun/${jobId}`,{method:'POST'})
             .then(r=>r.json())
             .then(({job_id,keywords,error})=>{
                 if(error){alert(error);return;}
@@ -1968,6 +1992,8 @@
         fetch('/schedules').then(r => r.json()).then(list => {
             const el = document.getElementById('sched-list');
             if (!list.length) { el.innerHTML = '<div class="sched-empty">예약된 항목이 없습니다.<br><span style="font-size:11px">위 버튼으로 첫 예약을 추가해보세요.</span></div>'; return; }
+            // XSS 방지: 스케줄 데이터를 캐시에 저장 후 ID만 onclick에 사용
+            list.forEach(s => { _scheduleCache[s.id] = s; });
             el.innerHTML = list.map(s => {
                 const dayMap = {'mon':'월','tue':'화','wed':'수','thu':'목','fri':'금','sat':'토','sun':'일'};
                 const days = s.days.split(',').map(d => dayMap[d]||d).join(' ');
@@ -1989,7 +2015,7 @@
                     </div>
                     <div class="sched-actions">
                         <button class="sched-btn sched-btn-toggle" onclick="toggleSchedule(${s.id})">${s.enabled ? '중지' : '시작'}</button>
-                        <button class="sched-btn sched-btn-edit" onclick="editSchedule(${JSON.stringify(s).replace(/"/g,'&quot;')})">수정</button>
+                        <button class="sched-btn sched-btn-edit" onclick="editSchedule(_scheduleCache[${s.id}])">수정</button>
                         <button class="sched-btn sched-btn-del" onclick="deleteSchedule(${s.id})">삭제</button>
                     </div>
                 </div>`;
@@ -2053,7 +2079,7 @@
         };
         const url = sid ? `/schedules/${sid}` : '/schedules';
         const method = sid ? 'PUT' : 'POST';
-        fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+        csrfFetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
             .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
             .then(({ ok, data }) => {
                 if (!ok) { showToast(data.error || '저장 실패', 'error'); return; }
@@ -2064,14 +2090,14 @@
     }
 
     function toggleSchedule(id) {
-        fetch(`/schedules/${id}/toggle`, {method:'POST'})
+        csrfFetch(`/schedules/${id}/toggle`, {method:'POST'})
             .then(r => r.json())
             .then(() => loadSchedules());
     }
 
     function deleteSchedule(id) {
         if (!confirm('이 예약을 삭제하시겠습니까?')) return;
-        fetch(`/schedules/${id}`, {method:'DELETE'})
+        csrfFetch(`/schedules/${id}`, {method:'DELETE'})
             .then(() => { showToast('삭제됨', 'info'); loadSchedules(); });
     }
 
@@ -2102,6 +2128,7 @@
         renderHistory();
     });
 
+    fetch('/csrf-token').then(r => r.json()).then(({ token }) => { _csrfToken = token; });
     loadHistory();
     populateQuickTags();
     loadStats();

@@ -110,6 +110,15 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  let _csrfToken = '';
+  function csrfFetch(url, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      options.headers = Object.assign({ 'X-CSRF-Token': _csrfToken }, options.headers || {});
+    }
+    return fetch(url, options);
+  }
+
   async function loadUsers() {
     const r = await fetch('/admin/users');
     if (!r.ok) return;
@@ -136,7 +145,7 @@
   async function createUser(e) {
     e.preventDefault();
     const msg = document.getElementById('msg');
-    const r = await fetch('/admin/users', {
+    const r = await csrfFetch('/admin/users', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -161,7 +170,7 @@
   }
 
   async function toggleUser(uid, enable) {
-    await fetch(`/admin/users/${uid}`, {
+    await csrfFetch(`/admin/users/${uid}`, {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({enabled: enable}),
@@ -171,10 +180,11 @@
 
   async function deleteUser(uid, username) {
     if (!confirm(`'${username}' 사용자를 삭제하시겠습니까?\n이 사용자의 잡 기록은 유지됩니다.`)) return;
-    await fetch(`/admin/users/${uid}`, {method: 'DELETE'});
+    await csrfFetch(`/admin/users/${uid}`, {method: 'DELETE'});
     loadUsers();
   }
 
+  fetch('/csrf-token').then(r => r.json()).then(({ token }) => { _csrfToken = token; });
   loadUsers();
 </script>
 </body>

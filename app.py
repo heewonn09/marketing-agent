@@ -4,6 +4,7 @@ import json as _json
 import os
 import queue
 import re as _re
+import secrets as _secrets
 import subprocess
 import sys
 import threading
@@ -113,6 +114,12 @@ def _check_credentials(user: str, pwd: str) -> bool:
     return verify_credentials(user, pwd, ADMIN_USER, ADMIN_PASSWORD, ADMIN_PASSWORD_HASH)
 
 
+def _get_csrf_token() -> str:
+    if "csrf_token" not in session:
+        session["csrf_token"] = _secrets.token_hex(32)
+    return session["csrf_token"]
+
+
 @app.before_request
 def _require_auth():
     if not _auth_enabled():
@@ -134,6 +141,34 @@ def _require_auth():
         return redirect(url_for("login", next=request.path))
     # API 클라이언트: 401 (WWW-Authenticate 헤더 없이 — Basic Auth 팝업 방지)
     return Response("인증이 필요합니다. X-API-Key 헤더를 사용하세요.", 401)
+
+
+@app.before_request
+def _check_csrf():
+    """세션 기반 POST/PUT/PATCH/DELETE 요청에 CSRF 토큰 검증."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    if request.path == "/login":
+        return
+    if not session.get("user_id"):
+        return  # _require_auth 가 401/redirect 처리
+    # X-API-Key 인증은 CSRF 면제
+    req_api_key = request.headers.get("X-API-Key", "").strip()
+    if req_api_key and API_KEY and hmac.compare_digest(
+        req_api_key.encode(), API_KEY.encode()
+    ):
+        return
+    token = request.headers.get("X-CSRF-Token", "")
+    expected = session.get("csrf_token", "")
+    if not expected or not token or not hmac.compare_digest(
+        token.encode(), expected.encode()
+    ):
+        return Response("CSRF 토큰이 없거나 유효하지 않습니다.", 403)
+
+
+@app.route("/csrf-token")
+def csrf_token_view():
+    return jsonify({"token": _get_csrf_token()})
 
 
 @app.route("/login", methods=["GET", "POST"])
