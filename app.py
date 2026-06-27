@@ -18,9 +18,14 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+sys.path.insert(0, str(Path(__file__).parent))
+# 암호화된 민감 환경변수를 load_dotenv 보다 먼저 주입 (data/.env.enc)
+from utils.secrets import load_env_secrets as _load_env_secrets
+_loaded_secrets = _load_env_secrets()
+if _loaded_secrets:
+    print(f"[startup] data/.env.enc 에서 {_loaded_secrets}개 민감 환경변수 로드")  # 로거 초기화 전이라 print 유지
 load_dotenv(Path(__file__).parent / ".env")
 
-sys.path.insert(0, str(Path(__file__).parent))
 from utils.job_store import (init_db, upsert_job, get_job, list_jobs, get_stats,
                              create_schedule, get_schedule, list_schedules,
                              update_schedule, delete_schedule)
@@ -35,6 +40,9 @@ from utils.user_store import (init_users, upsert_admin, verify_user,
 
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
+
+from utils.logging_setup import get_logger as _get_logger
+_log = _get_logger("app", log_file=ROOT / "logs" / "app.log")
 
 
 def _resolve_secret_key() -> str:
@@ -852,12 +860,12 @@ def schedules_toggle(sid):
 def scheduled_run(schedule_id: int):
     sched = get_schedule(schedule_id)
     if not sched or not sched["enabled"]:
-        print(f"[scheduler] 스케줄 {schedule_id} 없음/비활성 — 생략")
+        _log.info("스케줄 %s 없음/비활성 — 생략", schedule_id)
         return
     keywords = sched["keywords"]
     if not keywords:
         return
-    print(f"[scheduler] 자동 실행: id={schedule_id} {keywords}")
+    _log.info("스케줄 자동 실행: id=%s %s", schedule_id, keywords)
     job_id = uuid.uuid4().hex[:8]
     jobs[job_id] = {
         "status": "running", "queue": queue.Queue(), "date": None,
@@ -874,7 +882,7 @@ def scheduled_run(schedule_id: int):
                          post_instagram=sched["post_instagram"])
         except Exception as e:
             err_msg = f"스케줄 실행 중 예외 발생: {e}"
-            print(f"[scheduler] {err_msg}")
+            _log.error("스케줄 %s 예외: %s", schedule_id, e)
             if jobs.get(job_id, {}).get("status") == "running":
                 jobs[job_id]["status"] = "error"
                 upsert_job(job_id, "error", error_message=err_msg)
@@ -908,16 +916,16 @@ def _run_cleanup():
     # 정리 전에 상태 파일 백업 (실수 삭제·손상 대비 복구점)
     try:
         copied = backup_state(ROOT)
-        print(f"[backup] 상태 파일 {len(copied)}개 백업: {copied}")
+        _log.info("상태 파일 %d개 백업: %s", len(copied), copied)
     except Exception as e:
-        print(f"[backup] 실패: {e}")
+        _log.error("백업 실패: %s", e)
     deleted = cleanup_old_files(ROOT)
     if deleted:
         names = [f.name for f in deleted[:5]]
         extra = f" 외 {len(deleted) - 5}개" if len(deleted) > 5 else ""
-        print(f"[cleanup] {len(deleted)}개 삭제: {names}{extra}")
+        _log.info("파일 %d개 삭제: %s%s", len(deleted), names, extra)
     else:
-        print("[cleanup] 삭제 대상 없음")
+        _log.info("정리 대상 없음")
 
 
 def _refresh_ig_token_job() -> None:
@@ -929,7 +937,7 @@ def _refresh_ig_token_job() -> None:
     import requests as _req
     access_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "").strip()
     if not access_token:
-        print("[ig-token] INSTAGRAM_ACCESS_TOKEN 미설정 - 건너뜀")
+        _log.info("INSTAGRAM_ACCESS_TOKEN 미설정 - 건너뜀")
         return
     try:
         res = _req.get(
@@ -939,7 +947,7 @@ def _refresh_ig_token_job() -> None:
         )
         if not res.ok:
             msg = f"토큰 갱신 실패 {res.status_code}: {res.text[:120]}"
-            print(f"[ig-token] {msg}")
+            _log.error("ig-token: %s", msg)
             threading.Thread(
                 target=notify_error, args=([], "Instagram 토큰 갱신", msg), daemon=True
             ).start()
@@ -947,7 +955,7 @@ def _refresh_ig_token_job() -> None:
         data = res.json()
         new_token = data.get("access_token", "")
         days = data.get("expires_in", 0) // 86400
-        print(f"[ig-token] 갱신 완료 - 만료까지 {days}일")
+        _log.info("ig-token 갱신 완료 - 만료까지 %d일", days)
         if new_token and new_token != access_token:
             env_path = ROOT / ".env"
             if env_path.exists():
@@ -961,10 +969,10 @@ def _refresh_ig_token_job() -> None:
                 )
                 env_path.write_text(text, encoding="utf-8")
             os.environ["INSTAGRAM_ACCESS_TOKEN"] = new_token
-            print("[ig-token] .env 토큰 업데이트 완료")
+            _log.info("ig-token .env 업데이트 완료")
     except Exception as e:
         msg = f"토큰 갱신 예외: {e}"
-        print(f"[ig-token] {msg}")
+        _log.error("ig-token: %s", msg)
         threading.Thread(
             target=notify_error, args=([], "Instagram 토큰 갱신", msg), daemon=True
         ).start()

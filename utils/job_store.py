@@ -1,8 +1,13 @@
 import json
+import logging
 import sqlite3
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+
+from utils.state_machine import validate_transition, InvalidTransitionError
+
+_log = logging.getLogger("job_store")
 
 _DEFAULT_DB: Path | None = None
 
@@ -56,6 +61,10 @@ def init_db(db_path: Path) -> None:
                 conn.execute(col_def)
             except sqlite3.OperationalError:
                 pass  # 이미 존재하는 컬럼
+        # 쿼리 성능 인덱스 (히스토리 필터·정렬)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user_created ON jobs(user_id, created_at DESC)")
     mark_interrupted(db_path)
 
 
@@ -77,9 +86,15 @@ def upsert_job(
     with sqlite3.connect(path) as conn:
         existing = conn.execute(
             "SELECT created_at, keywords, date, naver_post_url, instagram_media_id, "
-            "instagram_permalink, duration_seconds, error_message, user_id FROM jobs WHERE job_id = ?",
+            "instagram_permalink, duration_seconds, error_message, user_id, status FROM jobs WHERE job_id = ?",
             (job_id,)
         ).fetchone()
+        current_status = existing[9] if existing else None
+        # FSM 검증 — 허용되지 않는 전이는 경고 로그만 (강제 중단 방지)
+        try:
+            validate_transition(current_status, status)
+        except InvalidTransitionError as _e:
+            _log.warning("FSM: %s (job=%s) — 전이 허용", _e, job_id)
         created_at         = existing[0] if existing else now
         final_keywords     = json.dumps(keywords) if keywords is not None else (existing[1] if existing else "[]")
         final_date         = date if date is not None else (existing[2] if existing else None)
