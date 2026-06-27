@@ -323,16 +323,31 @@ def _run_pipeline_part2(job_id: str, keywords: list[str], today: str,
     if post_instagram:
         for keyword in keywords:
             safe_kw = _re.sub(r'[<>:"/\\|?*\n\r\t]', "_", keyword)
-            cardnews_ready = all(
+            # PNG 4장 + imgbb URL JSON 모두 있어야 캐러셀 가능 (BUG-2 수정)
+            png_ready = all(
                 (ROOT / "output" / f"cardnews_{safe_kw}_{today}_{i}.png").exists()
                 for i in range(1, 5)
             )
+            json_ready = (ROOT / "output" / f"cardnews_urls_{safe_kw}_{today}.json").exists()
+            cardnews_ready = png_ready and json_ready
             ig_args = ["--keyword", keyword, "--date", today]
             if cardnews_ready:
                 ig_args.append("--carousel")
-                jobs[job_id]["queue"].put("LOG:[instagram] 카드뉴스 4장 감지 → 캐러셀 업로드")
-            if not _run_cmd(job_id, f"인스타그램 [{keyword}]", "agents/instagram/main.py", ig_args):
-                return
+                jobs[job_id]["queue"].put("LOG:[instagram] 카드뉴스 4장 + URL JSON 감지 → 캐러셀 업로드")
+            elif png_ready and not json_ready:
+                jobs[job_id]["queue"].put("LOG:[instagram] ⚠️ 카드뉴스 PNG 있지만 URL JSON 없음 → 단일 이미지로 발행")
+            # fatal=False: 인스타 실패가 다른 키워드나 잡 전체를 막지 않음 (BUG-1 수정)
+            ok = _run_cmd(job_id, f"인스타그램 [{keyword}]", "agents/instagram/main.py",
+                          ig_args, fatal=False)
+            if not ok:
+                jobs[job_id]["queue"].put(
+                    f"LOG:⚠️ [{keyword}] 인스타그램 발행 실패 — 다음 키워드 계속 진행"
+                )
+                threading.Thread(
+                    target=notify_error,
+                    args=([keyword], "인스타그램 발행", "발행 실패 (에러 로그 확인)"),
+                    daemon=True,
+                ).start()
 
     jobs[job_id]["status"] = "done"
     jobs[job_id]["date"] = today
